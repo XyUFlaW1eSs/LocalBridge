@@ -85,8 +85,10 @@ Phase 1 明确保持简单：没有配对令牌、认证或 TLS。它只适用�
 - [开发指南](docs/developer-guide.zh-CN.md)
 - [编码风格](docs/coding-style.zh-CN.md)
 - [Sprint 1 交付](docs/sprints/sprint-1.zh-CN.md)
+- [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)
+- [AI 项目上下文提示词](docs/ai-project-context-prompt.zh-CN.md)
 
 ## 许可证
 

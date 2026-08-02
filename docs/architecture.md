@@ -70,3 +70,31 @@ change is therefore not actively sent to an iPhone; the iPhone Pull Shortcut req
 New modules should implement `module.Module`, register only their own `/api/v1/<module>`
 routes, and publish/subscribe through EventBus rather than taking direct dependencies on
 other feature modules. Public contracts belong in `docs/protocol.md` before implementation.
+
+## Target platform layers
+
+As the roadmap expands, the architecture should converge on these layers:
+
+```text
+Clients and OS adapters
+        ↓
+Device identity, pairing, discovery and policy
+        ↓
+Transport (HTTP/WebSocket, chunking, retry, integrity)
+        ↓
+Sync engine (envelope, capabilities, delivery state, conflict policy)
+        ↓
+Feature modules (clipboard, files, URLs, images, notifications)
+        ↓
+Storage and observability
+```
+
+The layers are intentionally separate. A file module should not implement pairing, and a
+client should not need to understand another module's storage. The transport must carry
+metadata and delivery state without knowing whether the payload is a clipboard item or a file.
+The sync engine owns idempotency, capability fallback and conflict semantics; feature modules
+own validation and platform-specific application of their content.
+
+Future plugin support must add explicit manifests, capabilities, configuration namespaces and
+permissions. It must not turn arbitrary plugins into unrestricted access to the process,
+network or user data.

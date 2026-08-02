@@ -1,28 +1,23 @@
 # 路线图
 
+[English version](ROADMAP.md)
+
+LocalBridge 正从 Windows/iPhone 剪贴板 MVP 演进为本地优先、模块化的局域网跨设备协作平台。
+
 ## 已交付
 
 - Phase 0：仓库初始化与核心运行时。
 - Phase 1 / Sprint 1：Windows 与 iPhone 快捷指令之间的文本剪贴板交换。
+- `v0.1.0`：可运行的 Windows 发布包、前台诊断日志和完整中英文文档。
 
-## Phase 2 — 设备与发现
+## 计划版本
 
-- 配对与认证令牌。
-- 设备注册和局域网发现（mDNS 或 UDP 广播）。
-- 明确的设备允许列表与连接诊断。
+- **Phase 2 / `v0.2.x` — 平台加固：** 配置版本化、配对、认证、设备注册表、局域网发现、诊断、共享重试/超时策略以及服务/托盘设计。
+- **Phase 3 / `v0.3.x` — 同步引擎与富剪贴板：** 通用信封、能力协商、出站投递、离线队列、历史、图片、HTML/RTF 和截图。
+- **Phase 4 / `v0.4.x` — 局域网协作：** 文件传输、URL 推送、图片投递、通知、组合上下文任务和可恢复传输状态。
+- **Phase 5 / `v0.5.x` — 客户端与设备：** 原生 iOS/iPadOS、Android、macOS、Linux、Windows 托盘/服务、CLI、Web 诊断页和多设备目标选择。
+- **Phase 6 / `v0.6.x` — 自动化与插件：** 插件 SDK、权限、快捷键、浏览器扩展、Webhook、脚本、命令面板和安全工作流规则。
+- **Phase 7 / `v1.0.0` — 稳定平台：** 协议兼容策略、安全审查、签名产物、升级/回滚、恢复、性能预算和一致性测试套件。
 
-## Phase 3 — 富剪贴板
-
-- 图片和 HTML 格式。
-- 有界的本地历史记录。
-- 冲突策略和按设备配置的同步偏好。
-
-## Phase 4 — 局域网协作平台
-
-- 文件传输、URL 推送和通知。
-- Android、macOS 和 Linux 客户端。
-- 可选的桌面托盘/服务集成。
-
-路线图是方向性计划。公共 API 兼容性与本地隐私优先于快速增加功能。
-
-[English version](ROADMAP.md)
+详细能力地图、头脑风暴清单、依赖、优先级和发布门禁见 [`docs/roadmap.zh-CN.md`](docs/roadmap.zh-CN.md) 与
+[`docs/product-plan.zh-CN.md`](docs/product-plan.zh-CN.md)。开发流程见 [`docs/developer-guide.zh-CN.md`](docs/developer-guide.zh-CN.md)。

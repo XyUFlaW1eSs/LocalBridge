@@ -92,8 +92,10 @@ to the public internet.
 - [Developer guide](docs/developer-guide.md)
 - [Coding style](docs/coding-style.md)
 - [Sprint 1 delivery](docs/sprints/sprint-1.md)
+- [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)
+- [AI project context prompt](docs/ai-project-context-prompt.md)
 
 ## License
 
