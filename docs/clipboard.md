@@ -1,5 +1,7 @@
 # Clipboard Module Design
 
+[简体中文](clipboard.zh-CN.md)
+
 ## Responsibility
 
 The clipboard module translates between the stable HTTP/EventBus contracts and the operating

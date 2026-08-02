@@ -1,0 +1,87 @@
+# LocalBridge
+
+语言： [English](README.md) · [简体中文](README.zh-CN.md)
+
+LocalBridge 是一个轻量、以本地网络为优先的局域网协作平台。当前第一个可用模块通过两个 iPhone
+快捷指令，在 Windows 电脑与 iPhone 之间同步文本剪贴板内容。不需要云账号或中继服务。
+
+> 状态：Phase 0 与 Phase 1 / Sprint 1 已交付。Windows 剪贴板集成在 Windows 构建中启用，其余项目代码
+> 保持跨平台并可测试。
+
+## 功能概览
+
+```text
+iPhone 快捷指令 --HTTP POST--> Windows 上的 LocalBridge --Win32--> Windows 剪贴板
+iPhone 快捷指令 <--HTTP GET--- Windows 上的 LocalBridge <--Win32-- Windows 剪贴板
+```
+
+- `POST /api/v1/clipboard`：接收来自 iPhone 快捷指令的文本。
+- `GET /api/v1/clipboard/latest`：返回 Pull 快捷指令所需的最新内容。
+- Windows 监听器轮询 Win32 剪贴板序列号，并发布本地变化。
+- 使用 SHA-256 内容哈希避免重复更新和剪贴板反馈循环。
+- 通过 EventBus 与模块边界，为未来的文件、图片和通知功能保留扩展空间。
+
+## Windows 快速开始
+
+要求：Go 1.24 或更高版本，以及可信的私有局域网。当前服务没有认证或 TLS，不能绑定到不可信网络。
+
+```powershell
+Copy-Item configs/config.example.yaml configs/config.yaml
+go run ./cmd/localbridge -config configs/config.yaml
+```
+
+默认监听地址为 `0.0.0.0:8899`。在 Windows 电脑上验证：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
+```
+
+然后将 [`shortcut/README.md`](shortcut/README.md) 中的 `WINDOWS_IP` 替换为 Windows 私有 IPv4 地址，
+并创建 Push Clipboard 与 Pull Clipboard 快捷指令。
+
+## 开发命令
+
+```powershell
+go test ./...
+go vet ./...
+gofmt -w cmd internal
+go build ./cmd/localbridge
+```
+
+本地开发可使用 `configs/config.dev.yaml`。非 Windows 构建仍会启动 HTTP 服务，但使用空的剪贴板适配器，
+便于在 CI 和其他平台测试核心包。
+
+## 仓库结构
+
+| 路径 | 职责 |
+| --- | --- |
+| `cmd/localbridge` | 进程入口、命令行参数和信号生命周期 |
+| `internal/app` | 运行时组合与关闭流程 |
+| `internal/config` | YAML 配置与校验 |
+| `internal/eventbus` | 类型化事件名与非阻塞订阅 |
+| `internal/module` | 稳定的模块生命周期与路由注册 |
+| `internal/server` | 标准库 HTTP 服务与健康接口 |
+| `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
+| `docs` | 架构、协议、部署与开发规范 |
+| `shortcut` | iPhone 快捷指令配置与请求示例 |
+
+## 安全边界
+
+Phase 1 明确保持简单：没有配对令牌、认证或 TLS。它只适用于可信的家庭/办公局域网，并应将 Windows 防火墙
+限制在 Private 网络配置文件。配对与认证属于 Phase 2；不要将 8899 端口暴露到公网。
+
+## 文档
+
+- [架构](docs/architecture.zh-CN.md)
+- [协议与 API](docs/protocol.zh-CN.md)
+- [剪贴板模块设计](docs/clipboard.zh-CN.md)
+- [部署手册](docs/deployment.zh-CN.md)
+- [开发指南](docs/developer-guide.zh-CN.md)
+- [编码风格](docs/coding-style.zh-CN.md)
+- [Sprint 1 交付](docs/sprints/sprint-1.zh-CN.md)
+- [详细路线图](docs/roadmap.zh-CN.md)
+- [路线图（根目录）](ROADMAP.zh-CN.md)
+
+## 许可证
+
+LocalBridge 使用 [MIT License](LICENSE) 发布。中文说明见 [LICENSE.zh-CN.md](LICENSE.zh-CN.md)。

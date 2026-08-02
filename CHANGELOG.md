@@ -1,5 +1,7 @@
 # Changelog
 
+[简体中文](CHANGELOG.zh-CN.md)
+
 All notable changes to LocalBridge are documented here.
 
 ## [Unreleased]

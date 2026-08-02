@@ -1,5 +1,7 @@
 # Architecture
 
+[简体中文](architecture.zh-CN.md)
+
 ## Goals
 
 LocalBridge is designed as a long-lived, local-first platform rather than a one-off clipboard

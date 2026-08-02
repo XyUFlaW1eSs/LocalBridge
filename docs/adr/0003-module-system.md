@@ -1,5 +1,7 @@
 # ADR 0003: In-process modules and EventBus
 
+[简体中文](0003-module-system.zh-CN.md)
+
 ## Decision
 
 Modules own their routes and lifecycle. Cross-feature notifications use a non-blocking in-process

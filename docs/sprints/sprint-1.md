@@ -1,5 +1,7 @@
 # Sprint 1 — Clipboard MVP
 
+[简体中文](sprint-1.zh-CN.md)
+
 ## Goal
 
 Deliver a usable Windows ↔ iPhone text clipboard exchange over a trusted LAN.

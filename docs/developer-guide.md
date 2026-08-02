@@ -1,5 +1,7 @@
 # Developer Guide
 
+[简体中文](developer-guide.zh-CN.md)
+
 These principles define how LocalBridge is built:
 
 1. Keep the core stable; make features pluggable.

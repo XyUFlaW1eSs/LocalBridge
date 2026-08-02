@@ -1,5 +1,7 @@
 # Contributing to LocalBridge
 
+[简体中文](CONTRIBUTING.zh-CN.md)
+
 ## Workflow
 
 1. Create a focused branch from `main`.

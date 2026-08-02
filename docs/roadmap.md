@@ -1,5 +1,7 @@
 # LocalBridge Roadmap
 
+[简体中文](roadmap.zh-CN.md)
+
 This document is the detailed companion to the root-level [`ROADMAP.md`](../ROADMAP.md).
 
 ## Phase 0 — Core foundation (delivered)

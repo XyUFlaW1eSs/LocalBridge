@@ -1,5 +1,7 @@
 # LocalBridge
 
+语言： [English](README.md) · [简体中文](README.zh-CN.md)
+
 LocalBridge is a lightweight, local-first LAN collaboration platform. Its first usable
 module synchronizes text clipboard content between a Windows PC and an iPhone through two
 iPhone Shortcuts. No cloud account or relay service is required.

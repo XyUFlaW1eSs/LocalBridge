@@ -1,5 +1,7 @@
 # Protocol and API
 
+[简体中文](protocol.zh-CN.md)
+
 Base URL: `http://<windows-ip>:8899`.
 
 All bodies are UTF-8 JSON. Times are RFC 3339 UTC. Phase 1 is text-only.

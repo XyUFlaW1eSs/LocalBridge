@@ -1,5 +1,7 @@
 # Deployment Runbook (Windows)
 
+[简体中文](deployment.zh-CN.md)
+
 ## 1. Build
 
 Install Go 1.24+ and build on Windows:

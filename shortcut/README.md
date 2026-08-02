@@ -1,5 +1,7 @@
 # iPhone Shortcuts
 
+[简体中文](README.zh-CN.md)
+
 The first release intentionally uses two simple Shortcuts. The iPhone is a client; Windows
 hosts the HTTP API. Both devices must be on the same trusted LAN.
 

@@ -1,5 +1,7 @@
 # Coding Style
 
+[简体中文](coding-style.zh-CN.md)
+
 - Run `gofmt` on all Go files.
 - Keep package names short and responsibility-focused.
 - Return wrapped errors with operation context.

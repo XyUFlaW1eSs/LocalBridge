@@ -1,5 +1,7 @@
 # Roadmap
 
+[简体中文](ROADMAP.zh-CN.md)
+
 ## Delivered
 
 - Phase 0: repository bootstrap and core runtime.

@@ -1,5 +1,7 @@
 # ADR 0001: Modular internal layout
 
+[简体中文](0001-project-layout.zh-CN.md)
+
 ## Decision
 
 Use `cmd/`, `internal/app`, `internal/server`, `internal/eventbus`, `internal/module` and
