@@ -1,0 +1,3 @@
+$ErrorActionPreference = "Stop"
+if (gofmt -l cmd internal) { throw "Go files are not formatted" }
+go vet ./...

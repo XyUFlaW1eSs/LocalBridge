@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+mkdir -p dist
+go test ./...
+go vet ./...
+go build -trimpath -ldflags "-s -w" -o dist/localbridge ./cmd/localbridge

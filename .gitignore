@@ -1,0 +1,22 @@
+# Build output
+/bin/
+/dist/
+.gocache/
+*.exe
+*.test
+
+# Local configuration and runtime data
+configs/config.yaml
+data/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Go
+coverage.out
+vendor/

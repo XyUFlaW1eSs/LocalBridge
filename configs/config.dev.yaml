@@ -1,0 +1,16 @@
+server:
+  host: "127.0.0.1"
+  port: 8899
+
+device:
+  id: "local-dev"
+  name: "LocalBridge Development"
+
+clipboard:
+  enabled: true
+  max_text_bytes: 1048576
+  watch_interval: 500ms
+
+logging:
+  level: "debug"
+  format: "text"

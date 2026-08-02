@@ -1,0 +1,10 @@
+{
+  "id": "windows-pc-0000000000000000000",
+  "type": "text",
+  "mime_type": "text/plain",
+  "content": "latest clipboard content",
+  "hash": "sha256",
+  "device_id": "windows-pc",
+  "source": "local",
+  "created_at": "2026-08-02T00:00:00Z"
+}

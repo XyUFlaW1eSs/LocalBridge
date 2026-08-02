@@ -1,0 +1,19 @@
+server:
+  host: "0.0.0.0"
+  port: 8899
+  read_timeout: 5s
+  write_timeout: 5s
+  idle_timeout: 60s
+
+device:
+  id: "windows-pc"
+  name: "LocalBridge Windows"
+
+clipboard:
+  enabled: true
+  max_text_bytes: 1048576
+  watch_interval: 300ms
+
+logging:
+  level: "info"
+  format: "text"
