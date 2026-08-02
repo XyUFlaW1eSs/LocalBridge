@@ -23,7 +23,20 @@
 }
 ```
 
-将 `Clipboard` 的值替换为“获取剪贴板”的输出。如有需要，可根据返回的 `accepted` 值添加通知。
+将 `Clipboard` 的值替换为“获取剪贴板”的输出。如有需要，可根据返回的 `accepted` 值添加通知。完整请求字段如下：
+
+| 字段 | 必填 | 含义 |
+|---|---:|---|
+| `content` | 是* | 剪贴板文本，使用“获取剪贴板”的输出。 |
+| `text` | 否 | `content` 的兼容性别名。 |
+| `type` | 否 | Phase 1 使用 `text`。 |
+| `mime_type` | 否 | Phase 1 使用 `text/plain`。 |
+| `device_id` | 否 | 可选的来源设备标签，例如 `iphone-personal`。 |
+| `id` | 否 | 可选的客户端项目 ID。 |
+| `hash` | 否 | 可选的小写 SHA-256；缺失时由服务端计算。 |
+
+\* 也可以使用非空的 `text` 别名代替 `content`。响应字段、大小限制和错误码请查看
+[剪贴板模块与 API](../docs/clipboard.zh-CN.md)。
 
 ## Pull Clipboard（拉取剪贴板）
 

@@ -25,7 +25,20 @@ Create a Shortcut with these actions:
 ```
 
 Replace the `Clipboard` value with the output of **Get Clipboard**. Add a notification for
-the returned `accepted` value if desired.
+the returned `accepted` value if desired. The complete request fields are:
+
+| Field | Required | Meaning |
+|---|---:|---|
+| `content` | Yes* | Clipboard text; use the **Get Clipboard** output. |
+| `text` | No | Compatibility alias for `content`. |
+| `type` | No | Use `text` for Phase 1. |
+| `mime_type` | No | Use `text/plain` for Phase 1. |
+| `device_id` | No | Optional source-device label, such as `iphone-personal`. |
+| `id` | No | Optional client item ID. |
+| `hash` | No | Optional lowercase SHA-256; the server computes it when omitted. |
+
+\* A non-empty `text` alias can be used instead of `content`. See
+[Clipboard Module and API](../docs/clipboard.md) for response fields, limits and errors.
 
 ## Pull Clipboard
 
