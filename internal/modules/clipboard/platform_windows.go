@@ -93,7 +93,7 @@ func (platformClipboard) WriteText(value string) error {
 	return nil
 }
 
-func (platformClipboard) Watch(ctx context.Context, interval time.Duration, onChange func(string)) error {
+func (platformClipboard) Watch(ctx context.Context, interval time.Duration, onChange func(string), onError func(error)) error {
 	if interval <= 0 {
 		interval = 300 * time.Millisecond
 	}
@@ -112,6 +112,8 @@ func (platformClipboard) Watch(ctx context.Context, interval time.Duration, onCh
 			lastSequence = sequence
 			if value, err := (platformClipboard{}).ReadText(); err == nil {
 				onChange(value)
+			} else if onError != nil {
+				onError(err)
 			}
 		}
 	}

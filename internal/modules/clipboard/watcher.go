@@ -12,8 +12,9 @@ type Watcher struct {
 	platform Platform
 	interval time.Duration
 	onChange func(string)
+	onError  func(error)
 }
 
 func (w Watcher) Run(ctx context.Context) error {
-	return w.platform.Watch(ctx, w.interval, w.onChange)
+	return w.platform.Watch(ctx, w.interval, w.onChange, w.onError)
 }

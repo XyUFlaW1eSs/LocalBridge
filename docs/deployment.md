@@ -41,6 +41,15 @@ Do not create a Public profile rule and do not port-forward this service from th
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 ```
 
+To keep the logs visible in the current PowerShell window, run:
+
+```powershell
+.\scripts\run.ps1 -Executable .\dist\localbridge-v0.1.0\localbridge.exe -Config .\configs\config.yaml
+```
+
+The process logs module startup, HTTP requests, clipboard Push/Pull, deduplication and Win32
+write errors. Clipboard content itself is never logged.
+
 From the iPhone, use the Windows private IPv4 address in the Shortcut URL. Test Push, then
 Pull, then copy text directly on Windows and confirm the latest endpoint changes after the
 watch interval.

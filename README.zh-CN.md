@@ -21,6 +21,12 @@ iPhone 快捷指令 <--HTTP GET--- Windows 上的 LocalBridge <--Win32-- Windows
 - 使用 SHA-256 内容哈希避免重复更新和剪贴板反馈循环。
 - 通过 EventBus 与模块边界，为未来的文件、图片和通知功能保留扩展空间。
 
+Windows 本地剪贴板变化目前不会主动向 iPhone 发 HTTP 请求。它会更新内存中的 `latest`，然后由 iPhone Pull
+快捷指令主动 GET；这是 iOS 后台限制下的 Phase 1 设计。
+
+运行日志会输出到当前控制台。发布包可使用 `scripts/run.ps1` 前台运行，这样能看到每次 Push、Pull、去重和
+剪贴板写入的诊断信息；日志不会记录剪贴板正文。
+
 ## Windows 快速开始
 
 要求：Go 1.24 或更高版本，以及可信的私有局域网。当前服务没有认证或 TLS，不能绑定到不可信网络。

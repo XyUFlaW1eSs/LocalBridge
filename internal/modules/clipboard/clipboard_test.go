@@ -23,7 +23,9 @@ func (f *fakePlatform) WriteText(value string) error {
 	f.writes = append(f.writes, value)
 	return nil
 }
-func (f *fakePlatform) Watch(context.Context, time.Duration, func(string)) error { return nil }
+func (f *fakePlatform) Watch(context.Context, time.Duration, func(string), func(error)) error {
+	return nil
+}
 
 func testModule() (*Module, *fakePlatform) {
 	fake := &fakePlatform{}
@@ -78,6 +80,22 @@ func TestPushRejectsOversize(t *testing.T) {
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/clipboard", strings.NewReader(`{"content":"long"}`)))
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPushAcceptsPlainTextBody(t *testing.T) {
+	m, fake := testModule()
+	mux := http.NewServeMux()
+	m.Routes(mux)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/clipboard", strings.NewReader("plain shortcut content"))
+	request.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("plain text push status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if len(fake.writes) != 1 || fake.writes[0] != "plain shortcut content" {
+		t.Fatalf("unexpected plain text write: %#v", fake.writes)
 	}
 }
 

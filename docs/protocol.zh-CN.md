@@ -59,6 +59,12 @@ JSON 格式错误返回 `400`。
 返回最新项目。新进程在尚未收到剪贴板事件时返回 `404`。快捷指令应读取 `content` 字段并将其复制到 iPhone
 剪贴板。
 
+## Windows 本地剪贴板方向
+
+当用户直接在 Windows 上复制文本时，监听器会读取文本并更新内存中的 `latest` 项目。LocalBridge 当前不知晓
+iPhone 的对端地址，也不会自动向 iPhone 发 HTTP 请求。iPhone 必须运行 Pull 快捷指令主动 GET `latest`，再将
+返回的 `content` 设置到自己的剪贴板。
+
 ## 剪贴板状态
 
 `GET /api/v1/clipboard/status`

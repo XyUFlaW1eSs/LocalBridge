@@ -22,6 +22,14 @@ iPhone Shortcut <--HTTP GET--- LocalBridge on Windows <--Win32-- Windows Clipboa
 - SHA-256 content hashes prevent duplicate updates and clipboard feedback loops.
 - EventBus and module boundaries keep future file, image and notification features separate.
 
+Windows clipboard changes are not currently pushed to the iPhone automatically. The watcher
+updates the in-memory `latest` item; the iPhone must run the Pull Shortcut to GET it. This is
+the Phase 1 design under iOS background execution constraints.
+
+Runtime logs are written to the current console. Use `scripts/run.ps1` to run a release package
+in the foreground and see Push, Pull, deduplication and clipboard-write diagnostics. Clipboard
+content itself is never logged.
+
 ## Quick start on Windows
 
 Requirements: Go 1.24 or newer and a trusted private LAN. The current service intentionally

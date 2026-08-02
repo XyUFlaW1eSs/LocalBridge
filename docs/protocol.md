@@ -60,6 +60,13 @@ Sending the same hash again returns HTTP 200 with `accepted: false`. Content lar
 Returns the latest item. A fresh process without a clipboard event returns `404`. The Shortcut
 should read the `content` field and copy it to the iPhone clipboard.
 
+## Windows local clipboard direction
+
+When text is copied directly on Windows, the watcher reads it and updates the in-memory
+`latest` item. LocalBridge does not currently know a peer iPhone endpoint and does not make an
+automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to GET `latest` and
+copy the returned `content` to its own clipboard.
+
 ## Clipboard status
 
 `GET /api/v1/clipboard/status`

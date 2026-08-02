@@ -40,6 +40,14 @@ New-NetFirewallRule -DisplayName "LocalBridge (Private LAN)" `
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 ```
 
+需要持续查看日志时，请在 PowerShell 中运行：
+
+```powershell
+.\scripts\run.ps1 -Executable .\dist\localbridge-v0.1.0\localbridge.exe -Config .\configs\config.yaml
+```
+
+程序会在当前控制台输出模块启动、HTTP 请求、剪贴板 Push/Pull、去重和 Win32 写入错误；不会输出剪贴板正文。
+
 在 iPhone 上将快捷指令 URL 设置为 Windows 私有 IPv4 地址。依次测试 Push、Pull，然后在 Windows 上直接复制
 文本，并在等待监听间隔后确认 latest 接口已更新。
 

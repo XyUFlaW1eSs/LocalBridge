@@ -1,5 +1,6 @@
 param(
-    [string]$Output = "dist\localbridge.exe"
+    [string]$Output = "dist\localbridge.exe",
+    [string]$Version = "dev"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,5 +10,9 @@ if ($outputDir -and -not (Test-Path $outputDir)) {
 }
 go test ./...
 go vet ./...
-go build -trimpath -ldflags "-s -w" -o $Output ./cmd/localbridge
+$ldflags = "-s -w"
+if ($Version -and $Version -ne "dev") {
+    $ldflags = "$ldflags -X github.com/XyUFlaW1eSs/LocalBridge/internal/version.Value=$Version"
+}
+go build -buildvcs=false -trimpath -ldflags $ldflags -o $Output ./cmd/localbridge
 Write-Host "Built $Output"

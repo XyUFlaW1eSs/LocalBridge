@@ -61,6 +61,10 @@ uses a short-lived suppression map to avoid echoing the same content back into t
 Local changes follow the inverse path: read text, hash it, store it as `latest`, and publish an
 event. Phase 1 does not persist history; the latest item is held in memory.
 
+The Phase 1 clipboard module has no outbound HTTP client or peer registry. A Windows clipboard
+change is therefore not actively sent to an iPhone; the iPhone Pull Shortcut requests
+`GET /api/v1/clipboard/latest`.
+
 ## Extension rule
 
 New modules should implement `module.Module`, register only their own `/api/v1/<module>`

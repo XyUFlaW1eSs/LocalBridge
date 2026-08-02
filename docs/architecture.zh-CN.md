@@ -56,6 +56,9 @@ iPhone 不运行持久化监听器。Push 和 Pull 是用户主动触发的快�
 本地变化走相反路径：读取文本、计算哈希、保存为 `latest` 并发布事件。Phase 1 不持久化历史记录，最新
 项目只保存在内存中。
 
+Phase 1 剪贴板模块没有出站 HTTP 客户端或对端设备注册表。因此 Windows 剪贴板变化不会主动发送到 iPhone；
+必须由 iPhone Pull 快捷指令请求 `GET /api/v1/clipboard/latest`。
+
 ## 扩展规则
 
 新模块应实现 `module.Module`，只注册自己的 `/api/v1/<module>` 路由，并通过 EventBus 发布/订阅，而不是

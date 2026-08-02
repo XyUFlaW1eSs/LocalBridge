@@ -15,6 +15,9 @@ type Server struct {
 }
 
 func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, logger *slog.Logger, routes func(*http.ServeMux)) *Server {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/system/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "localbridge", "time": time.Now().UTC()})
@@ -42,9 +45,40 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func requestLogging(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
-		next.ServeHTTP(w, r)
-		logger.Info("HTTP request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(started).String())
+		capture := &responseCapture{ResponseWriter: w}
+		next.ServeHTTP(capture, r)
+		logger.Info("HTTP request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr, "status", capture.status(), "response_bytes", capture.bytes, "duration", time.Since(started).String())
 	})
+}
+
+type responseCapture struct {
+	http.ResponseWriter
+	statusCode int
+	bytes      int
+}
+
+func (w *responseCapture) WriteHeader(status int) {
+	if w.statusCode != 0 {
+		return
+	}
+	w.statusCode = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseCapture) Write(data []byte) (int, error) {
+	if w.statusCode == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(data)
+	w.bytes += n
+	return n, err
+}
+
+func (w *responseCapture) status() int {
+	if w.statusCode == 0 {
+		return http.StatusOK
+	}
+	return w.statusCode
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
