@@ -35,6 +35,12 @@ Generate a token outside the repository, for example with
 `[guid]::NewGuid().ToString("N")` in PowerShell. The token must be at least 16 characters;
 use a longer random value in practice. The server never logs it.
 
+To pair another LocalBridge host, set a local `security.pairing_code`, then call
+`POST /api/v1/devices/pair` with the peer's ID, address, port and capabilities. Store the
+returned peer token on the peer side. Set `discovery.enabled: true` only when UDP broadcast on
+the configured port is acceptable; discovery does not grant trust. A positive
+`device.health_interval` enables best-effort peer health checks and local clipboard forwarding.
+
 ## 3. Firewall
 
 Allow inbound TCP 8899 only on the Private profile, or replace the port with your configured

@@ -22,7 +22,8 @@ iPhone 快捷指令 <--HTTP GET--- Windows 上的 LocalBridge <--Win32-- Windows
 - 通过 EventBus 与模块边界，为未来的文件、图片和通知功能保留扩展空间。
 
 Windows 本地剪贴板变化目前不会主动向 iPhone 发 HTTP 请求。它会更新内存中的 `latest`，然后由 iPhone Pull
-快捷指令主动 GET；这是 iOS 后台限制下的 Phase 1 设计。
+快捷指令主动 GET；这是 iOS 后台限制下的 Phase 1 设计。已配对的其他 LocalBridge 桌面主机现在可以通过尽力而为的
+出站路径接收本地剪贴板事件；持久化队列和重试语义计划在 Phase 3 实现。
 
 运行日志会输出到当前控制台。发布包可使用 `scripts/run.ps1` 前台运行，这样能看到每次 Push、Pull、去重和
 剪贴板写入的诊断信息；日志不会记录剪贴板正文。
@@ -66,7 +67,8 @@ go build ./cmd/localbridge
 | `internal/config` | YAML 配置与校验 |
 | `internal/eventbus` | 类型化事件名与非阻塞订阅 |
 | `internal/module` | 稳定的模块生命周期与路由注册 |
-- `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
+| `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
+| `internal/transport` | 有边界的认证 HTTP JSON 对端传输 |
 | `internal/server` | 标准库 HTTP 服务与健康接口 |
 | `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
 | `docs` | 架构、协议、部署与开发规范 |
@@ -90,6 +92,7 @@ Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但
 - [Sprint 2.2 交付](docs/sprints/sprint-2.2.zh-CN.md)
 - [Sprint 2.3 交付](docs/sprints/sprint-2.3.zh-CN.md)
 - [Sprint 2.4 交付](docs/sprints/sprint-2.4.zh-CN.md)
+- [Sprint 2.5 交付](docs/sprints/sprint-2.5.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)

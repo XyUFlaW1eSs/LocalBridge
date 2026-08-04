@@ -9,6 +9,7 @@ device:
   id: "windows-pc"
   name: "LocalBridge Windows"
   registry_path: "data/devices.json"
+  health_interval: 30s
 
 security:
   # Enable after setting a strong token. Pairing code is required by /api/v1/devices/pair.

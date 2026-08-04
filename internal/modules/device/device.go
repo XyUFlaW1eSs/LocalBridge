@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 )
 
 const registryVersion = 1
@@ -32,6 +34,8 @@ type Module struct {
 	apiPort      int
 	capabilities []string
 	logger       *slog.Logger
+	bus          *eventbus.Bus
+	transport    *transport.Client
 
 	mu              sync.RWMutex
 	peers           map[string]Peer
@@ -39,13 +43,15 @@ type Module struct {
 	discoveryMu     sync.Mutex
 	discoveryConn   *net.UDPConn
 	discoveryCancel context.CancelFunc
+	healthCancel    context.CancelFunc
+	lifecycleCancel context.CancelFunc
 }
 
-func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, logger *slog.Logger) (*Module, error) {
+func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, logger *slog.Logger) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
+	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
 	if err := m.load(); err != nil {
 		return nil, err
 	}
@@ -55,19 +61,40 @@ func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery conf
 func (m *Module) Name() string { return "device" }
 
 func (m *Module) Start(ctx context.Context) error {
+	runCtx, lifecycleCancel := context.WithCancel(ctx)
+	m.lifecycleCancel = lifecycleCancel
 	m.mu.RLock()
 	count := len(m.peers)
 	m.mu.RUnlock()
 	m.logger.Info("device module started", "device_id", m.cfg.ID, "peer_count", count, "registry_path", m.cfg.RegistryPath)
 	if m.discovery.Enabled {
-		if err := m.startDiscovery(ctx); err != nil {
+		if err := m.startDiscovery(runCtx); err != nil {
+			lifecycleCancel()
+			m.lifecycleCancel = nil
 			return err
 		}
+	}
+	if m.cfg.HealthInterval > 0 {
+		healthCtx, cancel := context.WithCancel(runCtx)
+		m.healthCancel = cancel
+		go m.healthLoop(healthCtx)
+	}
+	if m.bus != nil {
+		events := m.bus.Subscribe(runCtx, eventbus.ClipboardChanged, 64)
+		go m.forwardClipboard(runCtx, events)
 	}
 	return nil
 }
 
 func (m *Module) Stop(context.Context) error {
+	if m.lifecycleCancel != nil {
+		m.lifecycleCancel()
+		m.lifecycleCancel = nil
+	}
+	if m.healthCancel != nil {
+		m.healthCancel()
+		m.healthCancel = nil
+	}
 	m.discoveryMu.Lock()
 	if m.discoveryCancel != nil {
 		m.discoveryCancel()
@@ -91,6 +118,137 @@ func (m *Module) ValidatePeerToken(token string) bool {
 	defer m.mu.RUnlock()
 	for _, peer := range m.peers {
 		if subtle.ConstantTimeCompare([]byte(token), []byte(peer.Token)) == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Module) healthLoop(ctx context.Context) {
+	m.probePeers(ctx)
+	ticker := time.NewTicker(m.cfg.HealthInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.probePeers(ctx)
+		}
+	}
+}
+
+func (m *Module) probePeers(ctx context.Context) {
+	peers := m.peerSnapshot()
+	for _, peer := range peers {
+		if ctx.Err() != nil {
+			return
+		}
+		if peer.Address == "" || peer.Port == 0 {
+			continue
+		}
+		var response struct {
+			Capabilities []string `json:"capabilities"`
+		}
+		err := m.transport.GetJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/system/capabilities", &response)
+		if err != nil {
+			m.setPeerHealth(peer.ID, "offline", nil)
+			m.logger.Debug("peer health check failed", "device_id", peer.ID, "address", peer.Address, "error", err)
+			continue
+		}
+		m.setPeerHealth(peer.ID, "online", response.Capabilities)
+		m.logger.Debug("peer health check succeeded", "device_id", peer.ID, "address", peer.Address)
+	}
+}
+
+func (m *Module) setPeerHealth(id, status string, capabilities []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	peer, ok := m.peers[id]
+	if !ok {
+		return
+	}
+	peer.Status = status
+	if status == "online" {
+		peer.LastSeen = time.Now().UTC()
+		if len(capabilities) > 0 {
+			peer.Capabilities = cleanCapabilities(capabilities)
+		}
+	}
+	m.peers[id] = peer
+}
+
+func (m *Module) peerSnapshot() []Peer {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	peers := make([]Peer, 0, len(m.peers))
+	for _, peer := range m.peers {
+		peer.Capabilities = append([]string(nil), peer.Capabilities...)
+		peers = append(peers, peer)
+	}
+	return peers
+}
+
+type clipboardEvent struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	MimeType string `json:"mime_type"`
+	Content  string `json:"content"`
+	Hash     string `json:"hash"`
+	DeviceID string `json:"device_id"`
+	Source   string `json:"source"`
+}
+
+func (m *Module) forwardClipboard(ctx context.Context, events <-chan eventbus.Event) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if event.Type != eventbus.ClipboardChanged {
+				continue
+			}
+			m.forwardClipboardEvent(ctx, event.Data)
+		}
+	}
+}
+
+func (m *Module) forwardClipboardEvent(ctx context.Context, data any) {
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		m.logger.Warn("clipboard event could not be encoded for peers", "error", err)
+		return
+	}
+	var item clipboardEvent
+	if err := json.Unmarshal(encoded, &item); err != nil || item.Source != "local" || item.Content == "" {
+		return
+	}
+	request := map[string]any{"id": item.ID, "type": item.Type, "mime_type": item.MimeType, "content": item.Content, "hash": item.Hash, "device_id": item.DeviceID}
+	for _, peer := range m.peerSnapshot() {
+		if peer.Address == "" || peer.Port == 0 || peer.Token == "" || !supports(peer.Capabilities, "clipboard.text.push") {
+			continue
+		}
+		var response struct {
+			Accepted bool `json:"accepted"`
+		}
+		err := m.transport.PostJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/clipboard", request, &response)
+		if err != nil {
+			m.logger.Warn("clipboard forwarding failed", "device_id", peer.ID, "bytes", len([]byte(item.Content)), "hash", item.Hash, "error", err)
+			continue
+		}
+		m.logger.Info("clipboard forwarded to peer", "device_id", peer.ID, "bytes", len([]byte(item.Content)), "hash", item.Hash, "accepted", response.Accepted)
+	}
+}
+
+func supports(capabilities []string, wanted string) bool {
+	if len(capabilities) == 0 {
+		return true
+	}
+	for _, capability := range capabilities {
+		if capability == wanted {
 			return true
 		}
 	}

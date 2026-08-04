@@ -191,6 +191,23 @@ Discovered devices are not added to `peers`, cannot access protected APIs and ar
 until the explicit pairing flow succeeds. Multicast/broadcast may be blocked by some networks;
 manual pairing remains the fallback.
 
+### Peer health and outbound clipboard delivery
+
+When `device.health_interval` is positive (default `30s`), LocalBridge periodically requests
+`GET /api/v1/system/capabilities` from paired peers that have an address, port and peer token.
+The peer status is reported as `online` or `offline` in the device list; a successful probe
+updates `last_seen` and capabilities in memory.
+
+For a paired peer advertising `clipboard.text.push`, a local Windows clipboard event is sent
+to `POST /api/v1/clipboard` using the peer token. Events whose source is `remote` are not
+forwarded again, which prevents a two-host echo loop. The request uses the same clipboard JSON
+fields documented above and the remote response's `accepted` value is logged as metadata.
+
+This first outbound path is best-effort: it has a bounded request timeout but no durable queue,
+retry scheduler, delivery receipt store or offline replay. EventBus notifications can be dropped
+when a subscriber is full. Those guarantees belong to the Phase 3 sync engine. iPhone Shortcuts
+remain an explicit Pull workflow because iPhone does not run a persistent listener in Phase 1.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON
@@ -212,6 +229,9 @@ discovery:
   enabled: false
   port: 8898
   announce_interval: 10s
+
+device:
+  health_interval: 30s
 ```
 
 The token is compared in constant time and is never written to logs. Peer tokens are accepted

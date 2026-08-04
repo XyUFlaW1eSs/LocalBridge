@@ -29,10 +29,12 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - Phase 2.1 added optional Bearer authentication, request IDs and capability discovery.
 - Phase 2.2 added an explicit pairing endpoint and persisted peer registry. Phase 2.3 added
   optional UDP discovery as an ephemeral, untrusted reachability list. Phase 2.4 lets paired
-  peer tokens authenticate protected APIs when auth is enabled. TLS, outbound peer delivery and
-  a public-client ecosystem are not implemented yet.
+  peer tokens authenticate protected APIs when auth is enabled. Phase 2.5 added peer health
+  probes and best-effort local clipboard forwarding; durable sync, TLS and a public-client
+  ecosystem are not implemented yet.
 - Windows-to-iPhone is currently a Pull flow: Windows updates in-memory latest; the iPhone
-  must GET it. Do not claim automatic push until outbound transport and peer registration exist.
+  must GET it. Paired LocalBridge desktop peers have best-effort outbound clipboard delivery,
+  but iPhone automatic push and durable queue/retry guarantees do not exist.
 
 ## Current HTTP contract
 
@@ -74,8 +76,9 @@ actions between trusted devices without requiring a cloud account or vendor rela
 
 1. Phase 2 / v0.2.x: configuration hardening, token expiry/rotation, TLS, diagnostics, shared
    retries/timeouts, persistence boundary and Windows service/tray design. Request IDs,
-   capabilities, transition auth, explicit pairing, peer registry and peer-token authentication
-   are already partially delivered; UDP discovery is implemented only as an untrusted hint.
+   capabilities, transition auth, explicit pairing, peer registry, peer-token authentication,
+   peer health and best-effort outbound clipboard are already partially delivered; UDP discovery
+   is implemented only as an untrusted hint.
 2. Phase 3 / v0.3.x: generic content envelope, capability negotiation, outbound delivery,
    delivery state, offline queue, history, rich clipboard, images, HTML/RTF and screenshots.
 3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, URL push, image delivery,

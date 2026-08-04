@@ -37,6 +37,8 @@ Shortcuts, which is compatible with iOS's background execution constraints.
   their buffer is full; events are notifications, not a durable queue.
 - `internal/modules/device`: local device identity, explicit pairing and the persisted peer
   registry. LAN discovery will remain a reachability hint and must not directly grant trust.
+- `internal/transport`: bounded HTTP JSON client used for peer capabilities, health checks and
+  best-effort outbound delivery. Durable queues and retry policy belong to the future sync engine.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
   in a build-tagged adapter.
 

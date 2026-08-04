@@ -33,6 +33,10 @@ security:
 请在仓库外生成 Token，例如在 PowerShell 中使用 `[guid]::NewGuid().ToString("N")`。Token 至少需要 16 个字符，
 实际使用时应采用更长的随机值。服务端不会记录 Token。
 
+如需配对另一台 LocalBridge 主机，设置本地 `security.pairing_code`，然后向 `POST /api/v1/devices/pair` 提交对端 ID、
+地址、端口和能力，并在对端安全保存返回的 peer Token。只有确认允许在配置端口上使用 UDP 广播时才启用
+`discovery.enabled`；发现不会授予信任。正数的 `device.health_interval` 会启用尽力而为的对端健康检查和本地剪贴板出站。
+
 ## 3. 防火墙
 
 仅在 Private 配置文件中允许 TCP 8899 入站；如果修改端口，请同步替换命令中的端口：

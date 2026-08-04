@@ -179,6 +179,19 @@ nonce，不包含认证凭据。
 发现到的设备不会加入 `peers`，不能访问受保护接口，也不会获得信任，直到显式配对成功。某些网络可能屏蔽组播/广播；
 手动配对始终是回退方式。
 
+### 对端健康与剪贴板出站投递
+
+当 `device.health_interval` 为正数（默认 `30s`）时，LocalBridge 会使用对端地址、端口和 peer Token，定期请求已配对
+对端的 `GET /api/v1/system/capabilities`。设备列表会显示 `online` 或 `offline`；探测成功会在内存中更新 `last_seen`
+和能力。
+
+对于声明支持 `clipboard.text.push` 的已配对对端，本地 Windows 剪贴板事件会使用 peer Token POST 到对端的
+`/api/v1/clipboard`。`source` 为 `remote` 的事件不会再次转发，因此两个 LocalBridge 主机之间不会形成回环。请求使用
+上文定义的剪贴板 JSON 字段，远端响应的 `accepted` 只作为元数据记录到日志。
+
+当前出站路径是尽力而为：有请求超时，但没有持久化队列、重试调度器、投递回执存储或离线重放。EventBus 缓冲区满时通知
+可能被丢弃；这些保证属于 Phase 3 同步引擎。由于 iPhone 不运行常驻监听器，Phase 1 的 iPhone Shortcuts 仍然是主动 Pull。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；
@@ -198,6 +211,9 @@ discovery:
   enabled: false
   port: 8898
   announce_interval: 10s
+
+device:
+  health_interval: 30s
 ```
 
 服务端使用常量时间比较 Token，并且不会把 Token 写入日志。只有启用认证后 peer Token 才会生效。这是 Phase 2 的过渡机制；

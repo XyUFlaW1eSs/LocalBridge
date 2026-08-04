@@ -29,9 +29,10 @@ type ServerConfig struct {
 }
 
 type DeviceConfig struct {
-	ID           string `yaml:"id" json:"id"`
-	Name         string `yaml:"name" json:"name"`
-	RegistryPath string `yaml:"registry_path" json:"registry_path"`
+	ID             string        `yaml:"id" json:"id"`
+	Name           string        `yaml:"name" json:"name"`
+	RegistryPath   string        `yaml:"registry_path" json:"registry_path"`
+	HealthInterval time.Duration `yaml:"health_interval" json:"health_interval"`
 }
 
 type SecurityConfig struct {
@@ -60,7 +61,7 @@ type LoggingConfig struct {
 func Default() Config {
 	return Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
-		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json"},
+		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json", HealthInterval: 30 * time.Second},
 		Security:  SecurityConfig{},
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
@@ -161,6 +162,12 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Device.Name = value
 	case "device.registry_path":
 		cfg.Device.RegistryPath = value
+	case "device.health_interval":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid device.health_interval: %w", err)
+		}
+		cfg.Device.HealthInterval = v
 	case "security.auth_enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -229,6 +236,9 @@ func (c Config) Validate() error {
 	}
 	if c.Device.RegistryPath == "" {
 		return errors.New("device.registry_path must not be empty")
+	}
+	if c.Device.HealthInterval < 0 {
+		return errors.New("device.health_interval must not be negative")
 	}
 	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
 		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")

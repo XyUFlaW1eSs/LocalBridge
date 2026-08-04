@@ -36,7 +36,7 @@ func New(cfg config.Config) (*App, error) {
 	if cfg.Clipboard.Enabled {
 		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
 	}
-	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, log)
+	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, log)
 	if err != nil {
 		return nil, err
 	}

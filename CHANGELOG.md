@@ -11,6 +11,7 @@ All notable changes to LocalBridge are documented here.
 - Phase 2 Sprint 2.2: added explicit pairing, peer-token generation, a persisted device registry and revoke/list APIs.
 - Phase 2 Sprint 2.3: added optional UDP discovery as an untrusted reachability hint.
 - Phase 2 Sprint 2.4: paired peer tokens can authenticate protected APIs when auth is enabled.
+- Phase 2 Sprint 2.5: added peer health probes and best-effort outbound clipboard delivery for paired LocalBridge peers.
 
 ## [0.1.0] - 2026-08-02
 

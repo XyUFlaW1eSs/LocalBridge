@@ -24,7 +24,9 @@ iPhone Shortcut <--HTTP GET--- LocalBridge on Windows <--Win32-- Windows Clipboa
 
 Windows clipboard changes are not currently pushed to the iPhone automatically. The watcher
 updates the in-memory `latest` item; the iPhone must run the Pull Shortcut to GET it. This is
-the Phase 1 design under iOS background execution constraints.
+the Phase 1 design under iOS background execution constraints. Paired LocalBridge desktop
+peers can now receive local clipboard events through a best-effort outbound path; durable
+queue/retry semantics are planned for Phase 3.
 
 Runtime logs are written to the current console. Use `scripts/run.ps1` to run a release package
 in the foreground and see Push, Pull, deduplication and clipboard-write diagnostics. Clipboard
@@ -71,7 +73,8 @@ on CI and on other platforms.
 | `internal/config` | YAML configuration and validation |
 | `internal/eventbus` | Typed event names and non-blocking subscriptions |
 | `internal/module` | Stable module lifecycle and route registration |
-- `internal/modules/device` | Device registry, explicit pairing and peer metadata |
+| `internal/modules/device` | Device registry, explicit pairing and peer metadata |
+| `internal/transport` | Bounded authenticated HTTP JSON peer transport |
 | `internal/server` | Standard-library HTTP server and health API |
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
 | `docs` | Architecture, protocol, deployment and development standards |
@@ -97,6 +100,7 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Sprint 2.2 delivery](docs/sprints/sprint-2.2.md)
 - [Sprint 2.3 delivery](docs/sprints/sprint-2.3.md)
 - [Sprint 2.4 delivery](docs/sprints/sprint-2.4.md)
+- [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)

@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -10,16 +11,18 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 )
 
 func TestPairListAndRevoke(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.json")
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +52,7 @@ func TestPairListAndRevoke(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +78,7 @@ func TestPairListAndRevoke(t *testing.T) {
 }
 
 func TestPairRejectsInvalidCode(t *testing.T) {
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +108,7 @@ func TestDiscoveryLifecycle(t *testing.T) {
 	}
 	port := probe.LocalAddr().(*net.UDPAddr).Port
 	_ = probe.Close()
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{Enabled: true, Port: port, AnnounceInterval: time.Hour}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{Enabled: true, Port: port, AnnounceInterval: time.Hour}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,5 +124,50 @@ func TestDiscoveryLifecycle(t *testing.T) {
 	defer m.discoveryMu.Unlock()
 	if m.discoveryConn != nil || m.discoveryCancel != nil {
 		t.Fatal("discovery resources were not released")
+	}
+}
+
+func TestForwardLocalClipboardEvent(t *testing.T) {
+	received := make(chan struct{}, 1)
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/clipboard" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body["content"] == "from-windows" {
+			received <- struct{}{}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"accepted": true})
+	}))
+	defer remote.Close()
+	host, portText, _ := strings.Cut(strings.TrimPrefix(remote.URL, "http://"), ":")
+	port, _ := strconv.Atoi(portText)
+	bus := eventbus.New()
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, []string{"clipboard.text.push"}, bus, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	m.Routes(mux)
+	pair := httptest.NewRecorder()
+	pairRequest := httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(fmt.Sprintf(`{"code":"pair-me","id":"desktop-peer","name":"Peer","address":%q,"port":%d,"capabilities":["clipboard.text.push"]}`, host, port)))
+	mux.ServeHTTP(pair, pairRequest)
+	if pair.Code != http.StatusOK {
+		t.Fatalf("pair failed: %d %s", pair.Code, pair.Body.String())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(eventbus.Event{Type: eventbus.ClipboardChanged, Data: map[string]any{"id": "item-1", "type": "text", "mime_type": "text/plain", "content": "from-windows", "hash": "hash-1", "device_id": "windows-pc", "source": "local"}})
+	select {
+	case <-received:
+	case <-time.After(2 * time.Second):
+		t.Fatal("local clipboard event was not forwarded")
+	}
+	if err := m.Stop(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
