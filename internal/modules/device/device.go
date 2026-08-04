@@ -82,6 +82,21 @@ func (m *Module) Stop(context.Context) error {
 	return nil
 }
 
+func (m *Module) ValidatePeerToken(token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, peer := range m.peers {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(peer.Token)) == 1 {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/devices", m.handleList)
 	mux.HandleFunc("GET /api/v1/devices/discovered", m.handleDiscovered)

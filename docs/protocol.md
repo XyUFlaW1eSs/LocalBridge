@@ -46,7 +46,8 @@ assume that a capability exists without checking this endpoint.
 
 `POST /api/v1/clipboard`
 
-When `security.auth_enabled` is true, send `Authorization: Bearer <token>`. Health remains
+When `security.auth_enabled` is true, send `Authorization: Bearer <token>`. The configured
+management token or a peer token returned from explicit pairing is accepted. Health remains
 available without authentication so a local operator can diagnose whether the process is up;
 clipboard and capabilities requests require authentication.
 
@@ -213,9 +214,10 @@ discovery:
   announce_interval: 10s
 ```
 
-The token is compared in constant time and is never written to logs. This configuration is a
-Phase 2 transition mechanism; a later pairing flow will provision and rotate credentials
-without requiring users to edit a secret directly in YAML.
+The token is compared in constant time and is never written to logs. Peer tokens are accepted
+only after authentication is enabled. This configuration is a Phase 2 transition mechanism;
+later pairing work will provision and rotate the management credential without requiring users
+to edit a secret directly in YAML.
 
 ## Compatibility and security
 

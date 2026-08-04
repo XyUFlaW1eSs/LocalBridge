@@ -14,10 +14,11 @@ import (
 )
 
 type Server struct {
-	logger      *slog.Logger
-	http        *http.Server
-	authToken   string
-	runtimeInfo RuntimeInfo
+	logger             *slog.Logger
+	http               *http.Server
+	authToken          string
+	peerTokenValidator func(string) bool
+	runtimeInfo        RuntimeInfo
 }
 
 type RuntimeInfo struct {
@@ -61,6 +62,8 @@ func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, l
 }
 
 func (s *Server) SetAuthToken(token string) { s.authToken = strings.TrimSpace(token) }
+
+func (s *Server) SetPeerTokenValidator(validator func(string) bool) { s.peerTokenValidator = validator }
 
 func (s *Server) SetRuntimeInfo(info RuntimeInfo) { s.runtimeInfo = info }
 
@@ -142,7 +145,9 @@ func authentication(s *Server, next http.Handler) http.Handler {
 			return
 		}
 		provided = strings.TrimSpace(provided[len(prefix):])
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(s.authToken)) != 1 {
+		validGlobal := subtle.ConstantTimeCompare([]byte(provided), []byte(s.authToken)) == 1
+		validPeer := s.peerTokenValidator != nil && s.peerTokenValidator(provided)
+		if !validGlobal && !validPeer {
 			writeError(w, http.StatusUnauthorized, "invalid authentication token", requestIDFrom(r))
 			return
 		}

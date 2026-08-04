@@ -43,6 +43,9 @@ func TestPairListAndRevoke(t *testing.T) {
 	if len(paired.Token) < 32 || paired.Device.ID != "iphone" || len(paired.Device.Capabilities) != 1 {
 		t.Fatalf("unexpected pair response: %s", pair.Body.String())
 	}
+	if !m.ValidatePeerToken(paired.Token) || m.ValidatePeerToken("invalid-peer-token") {
+		t.Fatal("peer token validation failed")
+	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}

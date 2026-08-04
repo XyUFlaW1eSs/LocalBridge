@@ -30,5 +30,6 @@ storage, migrations and SQLite when history/queues arrive.
 - Pairing code and bearer token are currently configured manually, which is transitional.
 - The registry contains a peer token needed by future outbound transport and must be protected
   by filesystem permissions and the host account.
-- Automatic provisioning, token rotation policy, encrypted-at-rest storage and discovery are
-  follow-up work.
+- Peer tokens are now accepted by the HTTP authentication boundary when authentication is
+  enabled. Automatic provisioning, token rotation policy, encrypted-at-rest storage and
+  discovery remain follow-up work.

@@ -43,7 +43,8 @@ Phase 1 只传输 UTF-8 文本。JSON 请求和响应使用 UTF-8，时间使用
 
 `POST /api/v1/clipboard`
 
-当 `security.auth_enabled` 为 `true` 时，请发送 `Authorization: Bearer <token>`。健康检查无需认证，以便本地
+当 `security.auth_enabled` 为 `true` 时，请发送 `Authorization: Bearer <token>`，可以使用管理 Token 或显式配对响应中
+返回的 peer Token。健康检查无需认证，以便本地
 操作人员诊断进程是否运行；剪贴板和能力接口需要认证。
 
 推荐请求体为 JSON 对象：
@@ -199,8 +200,8 @@ discovery:
   announce_interval: 10s
 ```
 
-服务端使用常量时间比较 Token，并且不会把 Token 写入日志。这是 Phase 2 的过渡机制；后续配对流程会自动配置和轮换
-凭据，不再要求用户直接编辑 YAML 中的密钥。
+服务端使用常量时间比较 Token，并且不会把 Token 写入日志。只有启用认证后 peer Token 才会生效。这是 Phase 2 的过渡机制；
+后续配对流程会自动配置和轮换管理凭据，不再要求用户直接编辑 YAML 中的密钥。
 
 ## 兼容性与安全
 

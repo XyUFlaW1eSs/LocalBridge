@@ -46,6 +46,7 @@ func TestCapabilitiesEndpoint(t *testing.T) {
 func TestAuthentication(t *testing.T) {
 	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	s.SetAuthToken("0123456789abcdef")
+	s.SetPeerTokenValidator(func(token string) bool { return token == "peer-token" })
 
 	unauthorized := httptest.NewRecorder()
 	s.http.Handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))
@@ -65,6 +66,14 @@ func TestAuthentication(t *testing.T) {
 	s.http.Handler.ServeHTTP(authorized, request)
 	if authorized.Code != http.StatusOK {
 		t.Fatalf("expected authenticated request to pass, got %d: %s", authorized.Code, authorized.Body.String())
+	}
+
+	peerAuthorized := httptest.NewRecorder()
+	peerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil)
+	peerRequest.Header.Set("Authorization", "Bearer peer-token")
+	s.http.Handler.ServeHTTP(peerAuthorized, peerRequest)
+	if peerAuthorized.Code != http.StatusOK {
+		t.Fatalf("expected peer token request to pass, got %d: %s", peerAuthorized.Code, peerAuthorized.Body.String())
 	}
 }
 

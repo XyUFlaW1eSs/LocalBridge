@@ -50,6 +50,7 @@ func New(cfg config.Config) (*App, error) {
 	}
 	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, manager.Routes)
 	srv.SetAuthToken(authToken(cfg))
+	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv}, nil
 }
