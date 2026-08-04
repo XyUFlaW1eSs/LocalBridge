@@ -23,6 +23,12 @@ discovery:
   port: 8898
   announce_interval: 10s
 
+sync:
+  enabled: true
+  store_path: "data/sync-jobs.json"
+  max_jobs: 1000
+  job_retention: 168h
+
 clipboard:
   enabled: true
   max_text_bytes: 1048576

@@ -16,6 +16,7 @@ type Config struct {
 	Device    DeviceConfig    `yaml:"device" json:"device"`
 	Security  SecurityConfig  `yaml:"security" json:"security"`
 	Discovery DiscoveryConfig `yaml:"discovery" json:"discovery"`
+	Sync      SyncConfig      `yaml:"sync" json:"sync"`
 	Clipboard ClipboardConfig `yaml:"clipboard" json:"clipboard"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
 }
@@ -47,6 +48,13 @@ type DiscoveryConfig struct {
 	AnnounceInterval time.Duration `yaml:"announce_interval" json:"announce_interval"`
 }
 
+type SyncConfig struct {
+	Enabled      bool          `yaml:"enabled" json:"enabled"`
+	StorePath    string        `yaml:"store_path" json:"store_path"`
+	MaxJobs      int           `yaml:"max_jobs" json:"max_jobs"`
+	JobRetention time.Duration `yaml:"job_retention" json:"job_retention"`
+}
+
 type ClipboardConfig struct {
 	Enabled       bool          `yaml:"enabled" json:"enabled"`
 	MaxTextBytes  int           `yaml:"max_text_bytes" json:"max_text_bytes"`
@@ -64,6 +72,7 @@ func Default() Config {
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json", HealthInterval: 30 * time.Second},
 		Security:  SecurityConfig{},
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
+		Sync:      SyncConfig{Enabled: true, StorePath: "data/sync-jobs.json", MaxJobs: 1000, JobRetention: 7 * 24 * time.Hour},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
 	}
@@ -196,6 +205,26 @@ func setValue(cfg *Config, section, key, value string) error {
 			return fmt.Errorf("invalid discovery.announce_interval: %w", err)
 		}
 		cfg.Discovery.AnnounceInterval = v
+	case "sync.enabled":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid sync.enabled: %w", err)
+		}
+		cfg.Sync.Enabled = v
+	case "sync.store_path":
+		cfg.Sync.StorePath = value
+	case "sync.max_jobs":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid sync.max_jobs: %w", err)
+		}
+		cfg.Sync.MaxJobs = v
+	case "sync.job_retention":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid sync.job_retention: %w", err)
+		}
+		cfg.Sync.JobRetention = v
 	case "clipboard.enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -248,6 +277,15 @@ func (c Config) Validate() error {
 	}
 	if c.Discovery.AnnounceInterval <= 0 {
 		return errors.New("discovery.announce_interval must be positive")
+	}
+	if c.Sync.StorePath == "" {
+		return errors.New("sync.store_path must not be empty")
+	}
+	if c.Sync.MaxJobs < 1 {
+		return errors.New("sync.max_jobs must be positive")
+	}
+	if c.Sync.JobRetention <= 0 {
+		return errors.New("sync.job_retention must be positive")
 	}
 	if c.Clipboard.MaxTextBytes < 1 {
 		return errors.New("clipboard.max_text_bytes must be positive")

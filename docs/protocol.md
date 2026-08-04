@@ -208,6 +208,10 @@ retry scheduler, delivery receipt store or offline replay. EventBus notification
 when a subscriber is full. Those guarantees belong to the Phase 3 sync engine. iPhone Shortcuts
 remain an explicit Pull workflow because iPhone does not run a persistent listener in Phase 1.
 
+The current job inspection endpoints are `GET /api/v1/sync/jobs` and
+`GET /api/v1/sync/jobs/{id}`. See [Sync Engine Foundation](sync.md) for the Envelope fields,
+state transitions, retention and limitations.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON

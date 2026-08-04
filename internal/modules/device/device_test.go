@@ -18,11 +18,12 @@ import (
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 )
 
 func TestPairListAndRevoke(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.json")
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func TestPairListAndRevoke(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestPairListAndRevoke(t *testing.T) {
 }
 
 func TestPairRejectsInvalidCode(t *testing.T) {
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +109,7 @@ func TestDiscoveryLifecycle(t *testing.T) {
 	}
 	port := probe.LocalAddr().(*net.UDPAddr).Port
 	_ = probe.Close()
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{Enabled: true, Port: port, AnnounceInterval: time.Hour}, 8899, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{Enabled: true, Port: port, AnnounceInterval: time.Hour}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,11 @@ func TestForwardLocalClipboardEvent(t *testing.T) {
 	host, portText, _ := strings.Cut(strings.TrimPrefix(remote.URL, "http://"), ":")
 	port, _ := strconv.Atoi(portText)
 	bus := eventbus.New()
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, []string{"clipboard.text.push"}, bus, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	store, err := syncstore.New(filepath.Join(t.TempDir(), "jobs.json"), 10, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, []string{"clipboard.text.push"}, bus, store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +171,18 @@ func TestForwardLocalClipboardEvent(t *testing.T) {
 	case <-received:
 	case <-time.After(2 * time.Second):
 		t.Fatal("local clipboard event was not forwarded")
+	}
+	deadline := time.After(2 * time.Second)
+	for {
+		jobs := store.List(10)
+		if len(jobs) == 1 && jobs[0].State == syncstore.StateDelivered {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("unexpected forwarding job state: %#v", jobs)
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 	if err := m.Stop(context.Background()); err != nil {
 		t.Fatal(err)

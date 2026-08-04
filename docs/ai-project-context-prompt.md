@@ -30,8 +30,9 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - Phase 2.2 added an explicit pairing endpoint and persisted peer registry. Phase 2.3 added
   optional UDP discovery as an ephemeral, untrusted reachability list. Phase 2.4 lets paired
   peer tokens authenticate protected APIs when auth is enabled. Phase 2.5 added peer health
-  probes and best-effort local clipboard forwarding; durable sync, TLS and a public-client
-  ecosystem are not implemented yet.
+  probes and best-effort local clipboard forwarding. Phase 3.1 added the generic Envelope,
+  durable Job store and read-only job inspection; retries, offline replay, rich content, TLS
+  and a public-client ecosystem are not implemented yet.
 - Windows-to-iPhone is currently a Pull flow: Windows updates in-memory latest; the iPhone
   must GET it. Paired LocalBridge desktop peers have best-effort outbound clipboard delivery,
   but iPhone automatic push and durable queue/retry guarantees do not exist.
@@ -65,6 +66,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - `internal/eventbus`: non-blocking in-process notifications; it is not a durable queue.
 - `internal/modules/device`: explicit pairing and persisted peer registry. Discovery must remain
   a reachability hint, not authorization.
+- `internal/syncstore`: versioned Envelope and durable Job state; it is the foundation for future
+  retries, receipts, offline replay and conflict policy.
 - `internal/modules/clipboard`: clipboard domain behavior and platform interface.
 - Planned layers are clients/adapters -> identity/trust/discovery/policy -> transport -> sync
   engine -> feature modules -> storage/observability.
@@ -79,8 +82,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
    capabilities, transition auth, explicit pairing, peer registry, peer-token authentication,
    peer health and best-effort outbound clipboard are already partially delivered; UDP discovery
    is implemented only as an untrusted hint.
-2. Phase 3 / v0.3.x: generic content envelope, capability negotiation, outbound delivery,
-   delivery state, offline queue, history, rich clipboard, images, HTML/RTF and screenshots.
+2. Phase 3 / v0.3.x: retry/offline policy, receipts, conflict/idempotency rules, history, rich
+   clipboard, images, HTML/RTF and screenshots. Envelope/job state is partially delivered.
 3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, URL push, image delivery,
    notifications, screenshots and composite context jobs.
 4. Phase 5 / v0.5.x: native iOS/iPadOS, Android, macOS, Linux, Windows tray/service, CLI,

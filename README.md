@@ -75,6 +75,7 @@ on CI and on other platforms.
 | `internal/module` | Stable module lifecycle and route registration |
 | `internal/modules/device` | Device registry, explicit pairing and peer metadata |
 | `internal/transport` | Bounded authenticated HTTP JSON peer transport |
+| `internal/syncstore` | Versioned Envelope and durable sync job state |
 | `internal/server` | Standard-library HTTP server and health API |
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
 | `docs` | Architecture, protocol, deployment and development standards |
@@ -91,6 +92,7 @@ private network profile. Do not expose port 8899 to the public internet.
 
 - [Architecture](docs/architecture.md)
 - [Protocol and API](docs/protocol.md)
+- [Sync engine foundation](docs/sync.md)
 - [Clipboard module design](docs/clipboard.md)
 - [Deployment runbook](docs/deployment.md)
 - [Developer guide](docs/developer-guide.md)
@@ -101,6 +103,7 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Sprint 2.3 delivery](docs/sprints/sprint-2.3.md)
 - [Sprint 2.4 delivery](docs/sprints/sprint-2.4.md)
 - [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
+- [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)

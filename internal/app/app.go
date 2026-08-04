@@ -13,7 +13,9 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/module"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/modules/clipboard"
 	deviceModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/device"
+	syncModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/sync"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
 )
 
@@ -32,11 +34,25 @@ func New(cfg config.Config) (*App, error) {
 	log := logger.New(cfg.Logging.Level, cfg.Logging.Format, nil)
 	bus := eventbus.New()
 	manager := module.NewManager()
+	var jobStore *syncstore.Store
+	if cfg.Sync.Enabled {
+		var err error
+		jobStore, err = syncstore.New(cfg.Sync.StorePath, cfg.Sync.MaxJobs, cfg.Sync.JobRetention)
+		if err != nil {
+			return nil, err
+		}
+		if err := manager.Register(syncModule.New(jobStore, log)); err != nil {
+			return nil, err
+		}
+	}
 	capabilities := []string{"system.health", "system.capabilities", "device.registry", "device.pairing", "device.discovery"}
+	if cfg.Sync.Enabled {
+		capabilities = append(capabilities, "sync.jobs")
+	}
 	if cfg.Clipboard.Enabled {
 		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
 	}
-	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, log)
+	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, jobStore, log)
 	if err != nil {
 		return nil, err
 	}

@@ -192,6 +192,9 @@ nonce，不包含认证凭据。
 当前出站路径是尽力而为：有请求超时，但没有持久化队列、重试调度器、投递回执存储或离线重放。EventBus 缓冲区满时通知
 可能被丢弃；这些保证属于 Phase 3 同步引擎。由于 iPhone 不运行常驻监听器，Phase 1 的 iPhone Shortcuts 仍然是主动 Pull。
 
+当前任务查询接口是 `GET /api/v1/sync/jobs` 和 `GET /api/v1/sync/jobs/{id}`。Envelope 字段、状态转换、保留策略和限制请查看
+[同步引擎基础](sync.zh-CN.md)。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；

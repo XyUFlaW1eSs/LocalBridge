@@ -69,6 +69,7 @@ go build ./cmd/localbridge
 | `internal/module` | 稳定的模块生命周期与路由注册 |
 | `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
 | `internal/transport` | 有边界的认证 HTTP JSON 对端传输 |
+| `internal/syncstore` | 带版本的 Envelope 与持久化同步任务状态 |
 | `internal/server` | 标准库 HTTP 服务与健康接口 |
 | `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
 | `docs` | 架构、协议、部署与开发规范 |
@@ -83,6 +84,7 @@ Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但
 
 - [架构](docs/architecture.zh-CN.md)
 - [协议与 API](docs/protocol.zh-CN.md)
+- [同步引擎基础](docs/sync.zh-CN.md)
 - [剪贴板模块设计](docs/clipboard.zh-CN.md)
 - [部署手册](docs/deployment.zh-CN.md)
 - [开发指南](docs/developer-guide.zh-CN.md)
@@ -93,6 +95,7 @@ Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但
 - [Sprint 2.3 交付](docs/sprints/sprint-2.3.zh-CN.md)
 - [Sprint 2.4 交付](docs/sprints/sprint-2.4.zh-CN.md)
 - [Sprint 2.5 交付](docs/sprints/sprint-2.5.zh-CN.md)
+- [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)

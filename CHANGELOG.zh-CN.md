@@ -10,6 +10,7 @@
 - Phase 2 Sprint 2.3：增加可选 UDP 发现，仅作为不可信的可达性提示。
 - Phase 2 Sprint 2.4：启用认证后，已配对 peer Token 可以访问受保护 API。
 - Phase 2 Sprint 2.5：增加对端健康探测，以及面向已配对 LocalBridge 对端的尽力而为剪贴板出站投递。
+- Phase 3 Sprint 3.1：增加通用 Envelope、持久化同步 Job、保留边界和只读任务查询接口。
 
 ## [0.1.0] - 2026-08-02
 

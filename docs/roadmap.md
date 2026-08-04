@@ -21,7 +21,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
 | `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
-| `v0.3.x` | Phase 3 | Planned | Generic sync engine, rich clipboard and history |
+| `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
 | `v0.4.x` | Phase 4 | Planned | Files, URLs, images, notifications and action delivery |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
 | `v0.6.x` | Phase 6 | Planned | Automation, tray/service UX and plugin SDK |
@@ -91,9 +91,12 @@ Exit criteria: two paired devices can discover each other, authenticate, report 
 show useful diagnostics and reject unpaired traffic; configuration and upgrade behavior are
 documented and tested.
 
-### Phase 3 — Generic sync engine, rich clipboard and history
+### Phase 3 — Generic sync engine, rich clipboard and history (in progress; Sprint 3.1 delivered)
 
 Goal: stop making every module invent its own synchronization semantics.
+
+Sprint 3.1 provides the generic Envelope, bounded persistent Job store and read-only job
+inspection. It currently wraps clipboard forwarding without claiming reliable delivery.
 
 Planned work:
 

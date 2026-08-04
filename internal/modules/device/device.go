@@ -20,6 +20,7 @@ import (
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 )
 
@@ -35,6 +36,7 @@ type Module struct {
 	capabilities []string
 	logger       *slog.Logger
 	bus          *eventbus.Bus
+	store        *syncstore.Store
 	transport    *transport.Client
 
 	mu              sync.RWMutex
@@ -47,11 +49,11 @@ type Module struct {
 	lifecycleCancel context.CancelFunc
 }
 
-func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, logger *slog.Logger) (*Module, error) {
+func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, store *syncstore.Store, logger *slog.Logger) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
+	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
 	if err := m.load(); err != nil {
 		return nil, err
 	}
@@ -227,17 +229,51 @@ func (m *Module) forwardClipboardEvent(ctx context.Context, data any) {
 		return
 	}
 	request := map[string]any{"id": item.ID, "type": item.Type, "mime_type": item.MimeType, "content": item.Content, "hash": item.Hash, "device_id": item.DeviceID}
+	payload, err := json.Marshal(request)
+	if err != nil {
+		m.logger.Warn("clipboard event could not be encoded as sync payload", "error", err)
+		return
+	}
 	for _, peer := range m.peerSnapshot() {
 		if peer.Address == "" || peer.Port == 0 || peer.Token == "" || !supports(peer.Capabilities, "clipboard.text.push") {
 			continue
 		}
+		var job syncstore.Job
+		tracked := m.store != nil
+		if tracked {
+			jobID := item.ID
+			if jobID == "" {
+				jobID = item.Hash
+			}
+			jobID = fmt.Sprintf("clipboard:%s:%s", jobID, peer.ID)
+			job, err = m.store.Create(syncstore.Envelope{ID: jobID, Kind: "clipboard.push", Type: item.Type, MIMEType: item.MimeType, Hash: item.Hash, SourceDeviceID: item.DeviceID, TargetDeviceID: peer.ID, CorrelationID: item.ID, Size: len(payload), Payload: payload})
+			if err != nil {
+				m.logger.Warn("clipboard sync job could not be created", "device_id", peer.ID, "hash", item.Hash, "error", err)
+				continue
+			}
+			if job.State == syncstore.StateDelivered {
+				continue
+			}
+			if _, err := m.store.Update(job.ID, syncstore.StateDelivering, ""); err != nil {
+				m.logger.Warn("clipboard sync job could not start", "device_id", peer.ID, "hash", item.Hash, "error", err)
+				continue
+			}
+		}
 		var response struct {
 			Accepted bool `json:"accepted"`
 		}
-		err := m.transport.PostJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/clipboard", request, &response)
+		err = m.transport.PostJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/clipboard", request, &response)
 		if err != nil {
+			if tracked {
+				_, _ = m.store.Update(job.ID, syncstore.StateFailed, err.Error())
+			}
 			m.logger.Warn("clipboard forwarding failed", "device_id", peer.ID, "bytes", len([]byte(item.Content)), "hash", item.Hash, "error", err)
 			continue
+		}
+		if tracked {
+			if _, err := m.store.Update(job.ID, syncstore.StateDelivered, ""); err != nil {
+				m.logger.Warn("clipboard sync job could not be completed", "device_id", peer.ID, "hash", item.Hash, "error", err)
+			}
 		}
 		m.logger.Info("clipboard forwarded to peer", "device_id", peer.ID, "bytes", len([]byte(item.Content)), "hash", item.Hash, "accepted", response.Accepted)
 	}

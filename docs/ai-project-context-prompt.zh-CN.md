@@ -25,7 +25,7 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - Phase 2.1 已增加可选 Bearer 认证、请求 ID 和能力发现。
 - Phase 2.2 已增加显式配对接口和持久化对端注册表；Phase 2.3 已增加可选 UDP 发现，结果只是临时且不可信的可达性列表；
   Phase 2.4 已让启用认证时的受保护 API 接受已配对 peer Token；Phase 2.5 已增加对端健康探测和本地剪贴板尽力而为出站。
-  持久化同步、TLS 和公共客户端生态尚未实现。
+  Phase 3.1 已增加通用 Envelope、持久化 Job 存储和只读查询；重试、离线重放、富内容、TLS 和公共客户端生态尚未实现。
 - 当前 Windows 到 iPhone 是 Pull 流程：Windows 更新内存中的 latest，iPhone 必须 GET。已配对 LocalBridge 桌面主机支持尽力而为的剪贴板出站，
   但 iPhone 自动推送和持久化队列/重试保证尚不存在。
 
@@ -53,6 +53,7 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - `internal/module`：稳定的模块生命周期和路由契约。
 - `internal/eventbus`：进程内非阻塞通知，不是持久队列。
 - `internal/modules/device`：显式配对和持久化对端注册表。发现必须只是可达性提示，不能成为授权。
+- `internal/syncstore`：带版本的 Envelope 和持久化 Job 状态，为未来重试、回执、离线重放和冲突策略提供基础。
 - `internal/modules/clipboard`：剪贴板领域逻辑和平台接口。
 - 计划中的分层是：客户端/适配器 -> 身份/信任/发现/策略 -> 传输层 -> 同步引擎 -> 功能模块 -> 存储/可观测性。
 - 功能模块不能互相导入或直接控制。使用公共契约和 EventBus 事件。核心负责生命周期、信任、传输和策略；模块负责领域校验和
@@ -62,7 +63,7 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 
 1. Phase 2 / v0.2.x：配置加固、Token 过期/轮换、TLS、诊断、共享重试/超时、持久化边界和 Windows 服务/托盘设计。
    请求 ID、能力、过渡认证、显式配对、对端注册表、不可信 UDP 发现提示、peer Token 认证、对端健康和尽力而为出站已部分交付。
-2. Phase 3 / v0.3.x：通用内容信封、能力协商、出站投递、投递状态、离线队列、历史、富剪贴板、图片、HTML/RTF 和截图。
+2. Phase 3 / v0.3.x：重试/离线策略、回执、冲突/幂等规则、历史、富剪贴板、图片、HTML/RTF 和截图；Envelope/Job 状态已部分交付。
 3. Phase 4 / v0.4.x：支持恢复和完整性校验的文件传输、URL 推送、图片投递、通知、截图及组合上下文任务。
 4. Phase 5 / v0.5.x：原生 iOS/iPadOS、Android、macOS、Linux、Windows 托盘/服务、CLI、Web 诊断页和多设备目标选择。
 5. Phase 6 / v0.6.x：插件 SDK、Manifest、能力、权限、快捷键、浏览器扩展、Webhook、脚本和安全自动化规则。
