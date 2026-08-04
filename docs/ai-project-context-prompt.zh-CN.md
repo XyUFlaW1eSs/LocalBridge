@@ -23,7 +23,8 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - Windows 使用 Win32 剪贴板适配器和轮询监听器；其他平台使用安全的空适配器，使核心仍可构建和测试。
 - 当前最新剪贴板数据只保存在内存中。
 - Phase 2.1 已增加可选 Bearer 认证、请求 ID 和能力发现。
-- Phase 2.2 已增加显式配对接口和持久化对端注册表，但自动局域网发现、peer Token 认证、TLS、出站对端投递和公共客户端生态尚未实现。
+- Phase 2.2 已增加显式配对接口和持久化对端注册表；Phase 2.3 已增加可选 UDP 发现，结果只是临时且不可信的可达性列表。
+  peer Token 认证、TLS、出站对端投递和公共客户端生态尚未实现。
 - 当前 Windows 到 iPhone 是 Pull 流程：Windows 更新内存中的 latest，iPhone 必须 GET；在出站传输和对端注册实现前，不要声称支持自动推送。
 
 ## 当前 HTTP 契约
@@ -37,6 +38,7 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - `GET /api/v1/devices/{id}`：返回单个已配对对端，不返回其 Token。
 - `POST /api/v1/devices/pair`：使用配置的 `security.pairing_code` 配对对端，并只在响应中返回一次生成的 peer Token；再次配对会轮换它。
 - `DELETE /api/v1/devices/{id}`：撤销对端。
+- `GET /api/v1/devices/discovered`：列出临时 UDP 发现提示；发现到的设备不可信，也不会进入已配对注册表。
 - Phase 1 默认最大值是 1048576 UTF-8 字节。hash 使用 SHA-256；相同 hash 会被忽略。远程写入有短暂抑制窗口，避免监听器回声。
 - 完整契约见 `docs/clipboard.md` 和 `docs/protocol.md`。
 
@@ -56,7 +58,8 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 
 ## 后续开发方向
 
-1. Phase 2 / v0.2.x：配置加固、局域网发现、peer Token 认证、Token 配置/轮换、诊断、共享重试/超时、持久化边界和 Windows 服务/托盘设计。请求 ID、能力、过渡认证、显式配对和对端注册表已部分交付。
+1. Phase 2 / v0.2.x：配置加固、peer Token 认证、Token 配置/轮换、诊断、共享重试/超时、持久化边界和 Windows 服务/托盘设计。
+   请求 ID、能力、过渡认证、显式配对、对端注册表和不可信 UDP 发现提示已部分交付。
 2. Phase 3 / v0.3.x：通用内容信封、能力协商、出站投递、投递状态、离线队列、历史、富剪贴板、图片、HTML/RTF 和截图。
 3. Phase 4 / v0.4.x：支持恢复和完整性校验的文件传输、URL 推送、图片投递、通知、截图及组合上下文任务。
 4. Phase 5 / v0.5.x：原生 iOS/iPadOS、Android、macOS、Linux、Windows 托盘/服务、CLI、Web 诊断页和多设备目标选择。

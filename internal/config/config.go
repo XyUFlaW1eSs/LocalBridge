@@ -15,6 +15,7 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server" json:"server"`
 	Device    DeviceConfig    `yaml:"device" json:"device"`
 	Security  SecurityConfig  `yaml:"security" json:"security"`
+	Discovery DiscoveryConfig `yaml:"discovery" json:"discovery"`
 	Clipboard ClipboardConfig `yaml:"clipboard" json:"clipboard"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
 }
@@ -39,6 +40,12 @@ type SecurityConfig struct {
 	PairingCode string `yaml:"pairing_code" json:"pairing_code"`
 }
 
+type DiscoveryConfig struct {
+	Enabled          bool          `yaml:"enabled" json:"enabled"`
+	Port             int           `yaml:"port" json:"port"`
+	AnnounceInterval time.Duration `yaml:"announce_interval" json:"announce_interval"`
+}
+
 type ClipboardConfig struct {
 	Enabled       bool          `yaml:"enabled" json:"enabled"`
 	MaxTextBytes  int           `yaml:"max_text_bytes" json:"max_text_bytes"`
@@ -55,6 +62,7 @@ func Default() Config {
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json"},
 		Security:  SecurityConfig{},
+		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
 	}
@@ -163,6 +171,24 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Security.BearerToken = value
 	case "security.pairing_code":
 		cfg.Security.PairingCode = value
+	case "discovery.enabled":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid discovery.enabled: %w", err)
+		}
+		cfg.Discovery.Enabled = v
+	case "discovery.port":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid discovery.port: %w", err)
+		}
+		cfg.Discovery.Port = v
+	case "discovery.announce_interval":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid discovery.announce_interval: %w", err)
+		}
+		cfg.Discovery.AnnounceInterval = v
 	case "clipboard.enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -206,6 +232,12 @@ func (c Config) Validate() error {
 	}
 	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
 		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")
+	}
+	if c.Discovery.Port < 1 || c.Discovery.Port > 65535 {
+		return fmt.Errorf("discovery.port must be between 1 and 65535: %d", c.Discovery.Port)
+	}
+	if c.Discovery.AnnounceInterval <= 0 {
+		return errors.New("discovery.announce_interval must be positive")
 	}
 	if c.Clipboard.MaxTextBytes < 1 {
 		return errors.New("clipboard.max_text_bytes must be positive")

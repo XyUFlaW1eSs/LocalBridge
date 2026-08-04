@@ -16,6 +16,12 @@ security:
   bearer_token: ""
   pairing_code: ""
 
+discovery:
+  # Discovery is an unauthenticated reachability hint; pairing still grants trust.
+  enabled: false
+  port: 8898
+  announce_interval: 10s
+
 clipboard:
   enabled: true
   max_text_bytes: 1048576

@@ -179,6 +179,17 @@ the same device ID rotates its token. `DELETE /api/v1/devices/{id}` revokes a pe
 stores the registry at `device.registry_path`; encrypted-at-rest storage and automatic token
 provisioning/rotation are later Phase 2 work.
 
+### LAN discovery
+
+When `discovery.enabled` is true, the device module sends and listens for bounded UDP/IPv4
+announcements on `discovery.port` (default `8898`). `GET /api/v1/devices/discovered` returns
+recent reachability hints. Discovery packets contain a protocol version, device metadata,
+API port, capabilities and a nonce; they do not contain authentication credentials.
+
+Discovered devices are not added to `peers`, cannot access protected APIs and are not trusted
+until the explicit pairing flow succeeds. Multicast/broadcast may be blocked by some networks;
+manual pairing remains the fallback.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON
@@ -195,6 +206,11 @@ security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
   pairing_code: "a-local-pairing-code"
+
+discovery:
+  enabled: false
+  port: 8898
+  announce_interval: 10s
 ```
 
 The token is compared in constant time and is never written to logs. This configuration is a

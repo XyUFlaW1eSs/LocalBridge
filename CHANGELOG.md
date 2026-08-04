@@ -9,6 +9,7 @@ All notable changes to LocalBridge are documented here.
 - Phase 2 Sprint 2.1: added request IDs, capability discovery and optional Bearer-token authentication.
 - Added security configuration, deployment guidance and protocol/ADR documentation for the transition boundary.
 - Phase 2 Sprint 2.2: added explicit pairing, peer-token generation, a persisted device registry and revoke/list APIs.
+- Phase 2 Sprint 2.3: added optional UDP discovery as an untrusted reachability hint.
 
 ## [0.1.0] - 2026-08-02
 

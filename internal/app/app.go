@@ -32,7 +32,11 @@ func New(cfg config.Config) (*App, error) {
 	log := logger.New(cfg.Logging.Level, cfg.Logging.Format, nil)
 	bus := eventbus.New()
 	manager := module.NewManager()
-	devices, err := deviceModule.New(cfg.Device, cfg.Security, log)
+	capabilities := []string{"system.health", "system.capabilities", "device.registry", "device.pairing", "device.discovery"}
+	if cfg.Clipboard.Enabled {
+		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
+	}
+	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, log)
 	if err != nil {
 		return nil, err
 	}
@@ -46,10 +50,6 @@ func New(cfg config.Config) (*App, error) {
 	}
 	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, manager.Routes)
 	srv.SetAuthToken(authToken(cfg))
-	capabilities := []string{"system.health", "system.capabilities"}
-	if cfg.Clipboard.Enabled {
-		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
-	}
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv}, nil
 }

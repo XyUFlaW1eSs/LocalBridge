@@ -95,6 +95,7 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Sprint 1 delivery](docs/sprints/sprint-1.md)
 - [Sprint 2.1 delivery](docs/sprints/sprint-2.1.md)
 - [Sprint 2.2 delivery](docs/sprints/sprint-2.2.md)
+- [Sprint 2.3 delivery](docs/sprints/sprint-2.3.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)

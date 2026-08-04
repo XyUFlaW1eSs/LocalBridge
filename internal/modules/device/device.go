@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,19 +26,26 @@ const maxRegistryBytes = 1024 * 1024
 const maxPeers = 1024
 
 type Module struct {
-	cfg      config.DeviceConfig
-	security config.SecurityConfig
-	logger   *slog.Logger
+	cfg          config.DeviceConfig
+	security     config.SecurityConfig
+	discovery    config.DiscoveryConfig
+	apiPort      int
+	capabilities []string
+	logger       *slog.Logger
 
-	mu    sync.RWMutex
-	peers map[string]Peer
+	mu              sync.RWMutex
+	peers           map[string]Peer
+	discovered      map[string]DiscoveredPeer
+	discoveryMu     sync.Mutex
+	discoveryConn   *net.UDPConn
+	discoveryCancel context.CancelFunc
 }
 
-func New(cfg config.DeviceConfig, security config.SecurityConfig, logger *slog.Logger) (*Module, error) {
+func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, logger *slog.Logger) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	m := &Module{cfg: cfg, security: security, logger: logger, peers: make(map[string]Peer)}
+	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
 	if err := m.load(); err != nil {
 		return nil, err
 	}
@@ -46,24 +54,50 @@ func New(cfg config.DeviceConfig, security config.SecurityConfig, logger *slog.L
 
 func (m *Module) Name() string { return "device" }
 
-func (m *Module) Start(_ context.Context) error {
+func (m *Module) Start(ctx context.Context) error {
 	m.mu.RLock()
 	count := len(m.peers)
 	m.mu.RUnlock()
 	m.logger.Info("device module started", "device_id", m.cfg.ID, "peer_count", count, "registry_path", m.cfg.RegistryPath)
+	if m.discovery.Enabled {
+		if err := m.startDiscovery(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (m *Module) Stop(context.Context) error {
+	m.discoveryMu.Lock()
+	if m.discoveryCancel != nil {
+		m.discoveryCancel()
+		m.discoveryCancel = nil
+	}
+	if m.discoveryConn != nil {
+		_ = m.discoveryConn.Close()
+		m.discoveryConn = nil
+	}
+	m.discoveryMu.Unlock()
 	m.logger.Info("device module stopped")
 	return nil
 }
 
 func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/devices", m.handleList)
+	mux.HandleFunc("GET /api/v1/devices/discovered", m.handleDiscovered)
 	mux.HandleFunc("GET /api/v1/devices/{id}", m.handleGet)
 	mux.HandleFunc("POST /api/v1/devices/pair", m.handlePair)
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", m.handleRevoke)
+}
+
+func (m *Module) handleDiscovered(w http.ResponseWriter, _ *http.Request) {
+	m.mu.RLock()
+	peers := make([]DiscoveredPeer, 0, len(m.discovered))
+	for _, peer := range m.discovered {
+		peers = append(peers, peer)
+	}
+	m.mu.RUnlock()
+	writeJSON(w, http.StatusOK, map[string]any{"peers": peers})
 }
 
 func (m *Module) handleList(w http.ResponseWriter, _ *http.Request) {
@@ -156,6 +190,106 @@ func (m *Module) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	m.mu.Unlock()
 	m.logger.Info("device revoked", "device_id", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (m *Module) startDiscovery(ctx context.Context) error {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: m.discovery.Port})
+	if err != nil {
+		return fmt.Errorf("start device discovery on UDP %d: %w", m.discovery.Port, err)
+	}
+	discoveryCtx, cancel := context.WithCancel(ctx)
+	m.discoveryMu.Lock()
+	m.discoveryConn = conn
+	m.discoveryCancel = cancel
+	m.discoveryMu.Unlock()
+	m.logger.Info("device discovery started", "udp_port", m.discovery.Port, "announce_interval", m.discovery.AnnounceInterval.String())
+	go m.receiveAnnouncements(discoveryCtx, conn)
+	go m.announceLoop(discoveryCtx, conn)
+	return nil
+}
+
+func (m *Module) announceLoop(ctx context.Context, conn *net.UDPConn) {
+	announce := func() {
+		packet := discoveryAnnouncement{Type: "localbridge.discovery.v1", ProtocolVersion: 1, DeviceID: m.cfg.ID, DeviceName: m.cfg.Name, APIPort: m.apiPort, Capabilities: append([]string(nil), m.capabilities...), Nonce: discoveryNonce()}
+		data, err := json.Marshal(packet)
+		if err != nil {
+			m.logger.Warn("device discovery announcement encode failed", "error", err)
+			return
+		}
+		_, err = conn.WriteToUDP(data, &net.UDPAddr{IP: net.IPv4bcast, Port: m.discovery.Port})
+		if err != nil {
+			m.logger.Warn("device discovery announcement failed", "error", err)
+			return
+		}
+		m.logger.Debug("device discovery announcement sent", "bytes", len(data))
+	}
+	announce()
+	ticker := time.NewTicker(m.discovery.AnnounceInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			announce()
+		}
+	}
+}
+
+func (m *Module) receiveAnnouncements(ctx context.Context, conn *net.UDPConn) {
+	buffer := make([]byte, 16*1024)
+	for {
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			return
+		}
+		n, address, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+				return
+			}
+			var networkError net.Error
+			if errors.As(err, &networkError) && networkError.Timeout() {
+				continue
+			}
+			m.logger.Warn("device discovery receive failed", "error", err)
+			continue
+		}
+		announcement, ok := parseDiscoveryAnnouncement(buffer[:n])
+		if !ok || announcement.DeviceID == m.cfg.ID {
+			continue
+		}
+		peerAddress := address.IP.String()
+		if peerAddress == "" || announcement.APIPort < 1 || announcement.APIPort > 65535 {
+			continue
+		}
+		peer := DiscoveredPeer{ID: announcement.DeviceID, Name: announcement.DeviceName, Address: peerAddress, Port: announcement.APIPort, Capabilities: cleanCapabilities(announcement.Capabilities), Status: "discovered", LastSeen: time.Now().UTC()}
+		m.mu.Lock()
+		m.discovered[peer.ID] = peer
+		m.mu.Unlock()
+		m.logger.Debug("device discovered", "device_id", peer.ID, "address", peer.Address, "port", peer.Port)
+	}
+}
+
+func parseDiscoveryAnnouncement(data []byte) (discoveryAnnouncement, bool) {
+	if len(data) == 0 || len(data) > 16*1024 {
+		return discoveryAnnouncement{}, false
+	}
+	var announcement discoveryAnnouncement
+	if err := json.Unmarshal(data, &announcement); err != nil {
+		return discoveryAnnouncement{}, false
+	}
+	if announcement.Type != "localbridge.discovery.v1" || announcement.ProtocolVersion != 1 || strings.TrimSpace(announcement.DeviceID) == "" || strings.TrimSpace(announcement.Nonce) == "" {
+		return discoveryAnnouncement{}, false
+	}
+	return announcement, true
+}
+
+func discoveryNonce() string {
+	token, err := newToken()
+	if err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return token[:16]
 }
 
 func validatePairRequest(req pairRequest, localID string) error {

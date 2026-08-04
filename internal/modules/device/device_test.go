@@ -1,22 +1,25 @@
 package device
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
 )
 
 func TestPairListAndRevoke(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.json")
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +46,7 @@ func TestPairListAndRevoke(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +72,7 @@ func TestPairListAndRevoke(t *testing.T) {
 }
 
 func TestPairRejectsInvalidCode(t *testing.T) {
-	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{PairingCode: "pair-me"}, config.DiscoveryConfig{}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,5 +82,41 @@ func TestPairRejectsInvalidCode(t *testing.T) {
 	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(`{"code":"wrong","id":"iphone"}`)))
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected invalid pairing code to return 401, got %d", recorder.Code)
+	}
+}
+
+func TestParseDiscoveryAnnouncement(t *testing.T) {
+	valid, ok := parseDiscoveryAnnouncement([]byte(`{"type":"localbridge.discovery.v1","protocol_version":1,"device_id":"phone","device_name":"Phone","api_port":8899,"nonce":"abc"}`))
+	if !ok || valid.DeviceID != "phone" || valid.APIPort != 8899 {
+		t.Fatalf("valid announcement was rejected: %#v", valid)
+	}
+	if _, ok := parseDiscoveryAnnouncement([]byte(`{"type":"other","protocol_version":1,"device_id":"phone","nonce":"abc"}`)); ok {
+		t.Fatal("unexpectedly accepted invalid announcement type")
+	}
+}
+
+func TestDiscoveryLifecycle(t *testing.T) {
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		t.Skipf("UDP unavailable: %v", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	_ = probe.Close()
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{Enabled: true, Port: port, AnnounceInterval: time.Hour}, 8899, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	m.discoveryMu.Lock()
+	defer m.discoveryMu.Unlock()
+	if m.discoveryConn != nil || m.discoveryCancel != nil {
+		t.Fatal("discovery resources were not released")
 	}
 }

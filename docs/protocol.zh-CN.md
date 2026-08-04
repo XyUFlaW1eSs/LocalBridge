@@ -169,6 +169,15 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 设备 ID 再次配对会轮换 Token。`DELETE /api/v1/devices/{id}` 会撤销对端。本 Sprint 将注册表保存到
 `device.registry_path`；静态加密存储以及自动 Token 配置/轮换属于后续 Phase 2 工作。
 
+### 局域网发现
+
+当 `discovery.enabled` 为 `true` 时，设备模块会在 `discovery.port`（默认 `8898`）上发送并监听有大小限制的 UDP/IPv4
+广播。`GET /api/v1/devices/discovered` 返回最近的可达性提示。发现数据包包含协议版本、设备元数据、API 端口、能力和
+nonce，不包含认证凭据。
+
+发现到的设备不会加入 `peers`，不能访问受保护接口，也不会获得信任，直到显式配对成功。某些网络可能屏蔽组播/广播；
+手动配对始终是回退方式。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；
@@ -183,6 +192,11 @@ security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
   pairing_code: "a-local-pairing-code"
+
+discovery:
+  enabled: false
+  port: 8898
+  announce_interval: 10s
 ```
 
 服务端使用常量时间比较 Token，并且不会把 Token 写入日志。这是 Phase 2 的过渡机制；后续配对流程会自动配置和轮换

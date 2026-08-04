@@ -35,6 +35,10 @@ device:
 security:
   auth_enabled: true
   bearer_token: "0123456789abcdef"
+discovery:
+  enabled: true
+  port: 8898
+  announce_interval: 2s
 clipboard:
   enabled: true
   max_text_bytes: 42
@@ -50,7 +54,7 @@ logging:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Server.Port != 9999 || cfg.Device.ID != "test-pc" || cfg.Clipboard.MaxTextBytes != 42 || cfg.Logging.Format != "json" || !cfg.Security.AuthEnabled {
+	if cfg.Server.Port != 9999 || cfg.Device.ID != "test-pc" || cfg.Clipboard.MaxTextBytes != 42 || cfg.Logging.Format != "json" || !cfg.Security.AuthEnabled || !cfg.Discovery.Enabled || cfg.Discovery.Port != 8898 {
 		t.Fatalf("unexpected config: %#v", cfg)
 	}
 }
