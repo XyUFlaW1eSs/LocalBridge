@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Server    ServerConfig    `yaml:"server" json:"server"`
 	Device    DeviceConfig    `yaml:"device" json:"device"`
+	Security  SecurityConfig  `yaml:"security" json:"security"`
 	Clipboard ClipboardConfig `yaml:"clipboard" json:"clipboard"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
 }
@@ -31,6 +32,11 @@ type DeviceConfig struct {
 	Name string `yaml:"name" json:"name"`
 }
 
+type SecurityConfig struct {
+	AuthEnabled bool   `yaml:"auth_enabled" json:"auth_enabled"`
+	BearerToken string `yaml:"bearer_token" json:"bearer_token"`
+}
+
 type ClipboardConfig struct {
 	Enabled       bool          `yaml:"enabled" json:"enabled"`
 	MaxTextBytes  int           `yaml:"max_text_bytes" json:"max_text_bytes"`
@@ -46,6 +52,7 @@ func Default() Config {
 	return Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows"},
+		Security:  SecurityConfig{},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
 	}
@@ -142,6 +149,14 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Device.ID = value
 	case "device.name":
 		cfg.Device.Name = value
+	case "security.auth_enabled":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid security.auth_enabled: %w", err)
+		}
+		cfg.Security.AuthEnabled = v
+	case "security.bearer_token":
+		cfg.Security.BearerToken = value
 	case "clipboard.enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -179,6 +194,9 @@ func (c Config) Validate() error {
 	}
 	if c.Device.ID == "" {
 		return errors.New("device.id must not be empty")
+	}
+	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
+		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")
 	}
 	if c.Clipboard.MaxTextBytes < 1 {
 		return errors.New("clipboard.max_text_bytes must be positive")

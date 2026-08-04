@@ -9,6 +9,11 @@ device:
   id: "windows-pc"
   name: "LocalBridge Windows"
 
+security:
+  # Enable after setting a strong token. Pairing will manage this in a future Phase 2 sprint.
+  auth_enabled: false
+  bearer_token: ""
+
 clipboard:
   enabled: true
   max_text_bytes: 1048576

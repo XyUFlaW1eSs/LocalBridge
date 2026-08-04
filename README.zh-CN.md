@@ -73,8 +73,8 @@ go build ./cmd/localbridge
 
 ## 安全边界
 
-Phase 1 明确保持简单：没有配对令牌、认证或 TLS。它只适用于可信的家庭/办公局域网，并应将 Windows 防火墙
-限制在 Private 网络配置文件。配对与认证属于 Phase 2；不要将 8899 端口暴露到公网。
+Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但配对、Token 配置/轮换和 TLS 仍待实现。服务
+仍只适用于可信的家庭/办公局域网，并应将 Windows 防火墙限制在 Private 网络配置文件；不要将 8899 端口暴露到公网。
 
 ## 文档
 
@@ -85,6 +85,7 @@ Phase 1 明确保持简单：没有配对令牌、认证或 TLS。它只适用�
 - [开发指南](docs/developer-guide.zh-CN.md)
 - [编码风格](docs/coding-style.zh-CN.md)
 - [Sprint 1 交付](docs/sprints/sprint-1.zh-CN.md)
+- [Sprint 2.1 交付](docs/sprints/sprint-2.1.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)

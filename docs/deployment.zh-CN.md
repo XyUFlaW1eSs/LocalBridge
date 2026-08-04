@@ -22,6 +22,17 @@ notepad .\configs\config.yaml
 设置稳定的 `device.id`。局域网使用时保持 `server.host` 为 `0.0.0.0`，并选择未被占用的端口。如果配置以后
 包含凭据，不要提交 `configs/config.yaml`。
 
+在允许其他设备连接前，建议启用 Phase 2 的过渡认证：
+
+```yaml
+security:
+  auth_enabled: true
+  bearer_token: "replace-with-a-long-random-token"
+```
+
+请在仓库外生成 Token，例如在 PowerShell 中使用 `[guid]::NewGuid().ToString("N")`。Token 至少需要 16 个字符，
+实际使用时应采用更长的随机值。服务端不会记录 Token。
+
 ## 3. 防火墙
 
 仅在 Private 配置文件中允许 TCP 8899 入站；如果修改端口，请同步替换命令中的端口：
@@ -38,7 +49,12 @@ New-NetFirewallRule -DisplayName "LocalBridge (Private LAN)" `
 ```powershell
 .\dist\localbridge.exe -config .\configs\config.yaml
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
+Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
+  -Headers @{ Authorization = "Bearer replace-with-a-long-random-token" }
 ```
+
+健康检查有意保持免认证，以便本地诊断。启用认证后，剪贴板和能力请求（包括 iPhone 快捷指令）都必须添加同一个
+`Authorization: Bearer <token>` Header。每个响应都会包含 `X-Request-ID`；报告故障时请保留该值。
 
 需要持续查看日志时，请在 PowerShell 中运行：
 
@@ -46,7 +62,8 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 .\scripts\run.ps1 -Executable .\dist\localbridge-v0.1.0\localbridge.exe -Config .\configs\config.yaml
 ```
 
-程序会在当前控制台输出模块启动、HTTP 请求、剪贴板 Push/Pull、去重和 Win32 写入错误；不会输出剪贴板正文。
+程序会在当前控制台输出模块启动、HTTP 请求、请求 ID、能力、剪贴板 Push/Pull、去重和 Win32 写入错误；不会输出
+剪贴板正文或认证 Token。
 
 在 iPhone 上将快捷指令 URL 设置为 Windows 私有 IPv4 地址。依次测试 Push、Pull，然后在 Windows 上直接复制
 文本，并在等待监听间隔后确认 latest 接口已更新。

@@ -13,6 +13,7 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/module"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/modules/clipboard"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
 )
 
 type App struct {
@@ -36,7 +37,20 @@ func New(cfg config.Config) (*App, error) {
 		}
 	}
 	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, manager.Routes)
+	srv.SetAuthToken(authToken(cfg))
+	capabilities := []string{"system.health", "system.capabilities"}
+	if cfg.Clipboard.Enabled {
+		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
+	}
+	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv}, nil
+}
+
+func authToken(cfg config.Config) string {
+	if !cfg.Security.AuthEnabled {
+		return ""
+	}
+	return cfg.Security.BearerToken
 }
 
 func (a *App) Start(ctx context.Context) error {

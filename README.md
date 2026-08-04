@@ -78,10 +78,10 @@ on CI and on other platforms.
 
 ## Security boundary
 
-Phase 1 is deliberately simple: there is no pairing token, authentication or TLS. It is
+Phase 1 started without authentication. Phase 2.1 adds optional Bearer-token authentication,
+but pairing, token provisioning/rotation and TLS are still pending. The service remains
 appropriate only for a trusted home/office LAN, with the Windows firewall restricted to the
-private network profile. Pairing and authentication are Phase 2 work; do not expose port 8899
-to the public internet.
+private network profile. Do not expose port 8899 to the public internet.
 
 ## Documentation
 
@@ -92,6 +92,7 @@ to the public internet.
 - [Developer guide](docs/developer-guide.md)
 - [Coding style](docs/coding-style.md)
 - [Sprint 1 delivery](docs/sprints/sprint-1.md)
+- [Sprint 2.1 delivery](docs/sprints/sprint-2.1.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)

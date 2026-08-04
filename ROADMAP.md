@@ -13,7 +13,9 @@ collaboration platform.
 
 ## Planned releases
 
-- **Phase 2 / `v0.2.x` — Platform hardening:** configuration versioning, pairing, authentication,
+- **Phase 2 / `v0.2.x` — Platform hardening:** Sprint 2.1 delivered request IDs, capabilities and
+  transition authentication; remaining work includes configuration versioning, pairing,
+  authentication provisioning,
   device registry, LAN discovery, diagnostics, shared retry/timeout policy and service/tray design.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.

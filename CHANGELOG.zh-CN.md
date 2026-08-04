@@ -4,7 +4,8 @@
 
 ## [Unreleased]
 
-- 正在交付 Phase 0 核心框架与 Phase 1 剪贴板模块。
+- Phase 2 Sprint 2.1：增加请求 ID、能力发现和可选 Bearer Token 认证。
+- 增加安全配置、部署说明以及过渡安全边界的协议/ADR 文档。
 
 ## [0.1.0] - 2026-08-02
 

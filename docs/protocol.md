@@ -17,9 +17,38 @@ Phase 1 transports UTF-8 text only. JSON requests and responses use UTF-8. Times
 {"status":"ok","service":"localbridge","time":"2026-08-02T00:00:00Z"}
 ```
 
+The response also includes `request_id`. Every response carries the same value in the
+`X-Request-ID` header. Clients may send their own short `X-Request-ID`; the server generates
+one when it is missing or too long.
+
+## Capabilities
+
+`GET /api/v1/system/capabilities`
+
+This endpoint lets a client choose a compatible workflow before sending content:
+
+```json
+{
+  "service": "localbridge",
+  "version": "v0.1.0",
+  "api_version": "v1",
+  "protocol_version": 1,
+  "request_id": "<request-id>",
+  "device": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "capabilities": ["system.health", "system.capabilities", "clipboard.text.push", "clipboard.text.pull"]
+}
+```
+
+Capability names are opaque strings. Clients must tolerate unknown capabilities and must not
+assume that a capability exists without checking this endpoint.
+
 ## Push clipboard
 
 `POST /api/v1/clipboard`
+
+When `security.auth_enabled` is true, send `Authorization: Bearer <token>`. Health remains
+available without authentication so a local operator can diagnose whether the process is up;
+clipboard and capabilities requests require authentication.
 
 The preferred body is a JSON object:
 
@@ -113,7 +142,21 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON
 shape or empty content; `404` means no latest item; `413` means the configured byte limit
 was exceeded; `503` means the system clipboard is unavailable or a Windows write failed;
-`500` is an unexpected internal error. Unsupported methods return `405`.
+`500` is an unexpected internal error. `401` means authentication is missing or invalid.
+Unsupported methods return `405`. Error responses include `request_id` and the same value in
+the `X-Request-ID` response header.
+
+## Security configuration
+
+```yaml
+security:
+  auth_enabled: true
+  bearer_token: "a-long-random-token-at-least-16-characters"
+```
+
+The token is compared in constant time and is never written to logs. This configuration is a
+Phase 2 transition mechanism; a later pairing flow will provision and rotate credentials
+without requiring users to edit a secret directly in YAML.
 
 ## Compatibility and security
 

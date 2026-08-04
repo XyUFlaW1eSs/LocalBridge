@@ -20,7 +20,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | Release | Phase | Status | Result |
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
-| `v0.2.x` | Phase 2 | Planned | Trust, discovery, diagnostics and production-ready foundation |
+| `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
 | `v0.3.x` | Phase 3 | Planned | Generic sync engine, rich clipboard and history |
 | `v0.4.x` | Phase 4 | Planned | Files, URLs, images, notifications and action delivery |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
@@ -63,7 +63,7 @@ is complete until its acceptance criteria and release gate pass.
 - Device ID, SHA-256 deduplication and feedback-loop suppression.
 - Runtime diagnostics, tests and a runnable `v0.1.0` package.
 
-### Phase 2 — Platform hardening, trust and discovery
+### Phase 2 — Platform hardening, trust and discovery (in progress; Sprint 2.1 delivered)
 
 Goal: make the platform safe and diagnosable before adding more payload types.
 

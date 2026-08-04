@@ -16,9 +16,35 @@ Phase 1 只传输 UTF-8 文本。JSON 请求和响应使用 UTF-8，时间使用
 {"status":"ok","service":"localbridge","time":"2026-08-02T00:00:00Z"}
 ```
 
+响应还包含 `request_id`。每个响应都会在 `X-Request-ID` Header 中返回相同值。客户端可以发送自己的短
+`X-Request-ID`；缺失或过长时由服务端生成。
+
+## 能力发现
+
+`GET /api/v1/system/capabilities`
+
+客户端可以在发送内容前通过该接口选择兼容工作流：
+
+```json
+{
+  "service": "localbridge",
+  "version": "v0.1.0",
+  "api_version": "v1",
+  "protocol_version": 1,
+  "request_id": "<request-id>",
+  "device": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "capabilities": ["system.health", "system.capabilities", "clipboard.text.push", "clipboard.text.pull"]
+}
+```
+
+能力名称是不可枚举的字符串。客户端必须容忍未知能力，并且在使用某项能力前不能假设它一定存在。
+
 ## 推送剪贴板
 
 `POST /api/v1/clipboard`
+
+当 `security.auth_enabled` 为 `true` 时，请发送 `Authorization: Bearer <token>`。健康检查无需认证，以便本地
+操作人员诊断进程是否运行；剪贴板和能力接口需要认证。
 
 推荐请求体为 JSON 对象：
 
@@ -108,7 +134,19 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；
 `413` 表示超过配置的字节限制；`503` 表示系统剪贴板不可用或 Windows 写入失败；`500` 表示未预期的内部错误。
-不支持的方法返回 `405`。
+`401` 表示缺少或无效的认证。不支持的方法返回 `405`。错误响应包含 `request_id`，并在 `X-Request-ID` 响应
+Header 中返回同一个值。
+
+## 安全配置
+
+```yaml
+security:
+  auth_enabled: true
+  bearer_token: "a-long-random-token-at-least-16-characters"
+```
+
+服务端使用常量时间比较 Token，并且不会把 Token 写入日志。这是 Phase 2 的过渡机制；后续配对流程会自动配置和轮换
+凭据，不再要求用户直接编辑 YAML 中的密钥。
 
 ## 兼容性与安全
 

@@ -6,7 +6,8 @@ All notable changes to LocalBridge are documented here.
 
 ## [Unreleased]
 
-- Phase 0 core framework and Phase 1 clipboard module are being delivered.
+- Phase 2 Sprint 2.1: added request IDs, capability discovery and optional Bearer-token authentication.
+- Added security configuration, deployment guidance and protocol/ADR documentation for the transition boundary.
 
 ## [0.1.0] - 2026-08-02
 

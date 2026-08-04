@@ -22,6 +22,19 @@ notepad .\configs\config.yaml
 Set a stable `device.id`. Keep `server.host` as `0.0.0.0` for LAN use and choose a port that
 is not occupied. Never commit `configs/config.yaml` if it later contains credentials.
 
+For a LAN deployment, enable the Phase 2 transition authentication before allowing other
+devices to connect:
+
+```yaml
+security:
+  auth_enabled: true
+  bearer_token: "replace-with-a-long-random-token"
+```
+
+Generate a token outside the repository, for example with
+`[guid]::NewGuid().ToString("N")` in PowerShell. The token must be at least 16 characters;
+use a longer random value in practice. The server never logs it.
+
 ## 3. Firewall
 
 Allow inbound TCP 8899 only on the Private profile, or replace the port with your configured
@@ -39,7 +52,14 @@ Do not create a Public profile rule and do not port-forward this service from th
 ```powershell
 .\dist\localbridge.exe -config .\configs\config.yaml
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
+Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
+  -Headers @{ Authorization = "Bearer replace-with-a-long-random-token" }
 ```
+
+Health is intentionally unauthenticated for local diagnostics. When authentication is
+enabled, add the same `Authorization: Bearer <token>` header to clipboard and capabilities
+requests, including the iPhone Shortcut. Every response includes `X-Request-ID`; preserve it
+when reporting a failure.
 
 To keep the logs visible in the current PowerShell window, run:
 
@@ -47,8 +67,8 @@ To keep the logs visible in the current PowerShell window, run:
 .\scripts\run.ps1 -Executable .\dist\localbridge-v0.1.0\localbridge.exe -Config .\configs\config.yaml
 ```
 
-The process logs module startup, HTTP requests, clipboard Push/Pull, deduplication and Win32
-write errors. Clipboard content itself is never logged.
+The process logs module startup, HTTP requests, request IDs, capabilities, clipboard Push/Pull,
+deduplication and Win32 write errors. Clipboard content and authentication tokens are never logged.
 
 From the iPhone, use the Windows private IPv4 address in the Shortcut URL. Test Push, then
 Pull, then copy text directly on Windows and confirm the latest endpoint changes after the
