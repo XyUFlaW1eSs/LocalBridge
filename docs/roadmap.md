@@ -63,7 +63,7 @@ is complete until its acceptance criteria and release gate pass.
 - Device ID, SHA-256 deduplication and feedback-loop suppression.
 - Runtime diagnostics, tests and a runnable `v0.1.0` package.
 
-### Phase 2 — Platform hardening, trust and discovery (in progress; Sprint 2.1 delivered)
+### Phase 2 — Platform hardening, trust and discovery (in progress; Sprints 2.1–2.2 delivered)
 
 Goal: make the platform safe and diagnosable before adding more payload types.
 
@@ -72,6 +72,8 @@ Planned work:
 - Versioned configuration schema, defaults, migration rules and redacted config diagnostics.
 - Stable error envelope, request IDs, API capability endpoint and compatibility tests.
 - Device identity, pairing flow, token storage, allow-list, revoke/reset and safe first-run UX.
+- Sprint 2.2 now provides an explicit pairing-code flow, persisted peer registry and revoke/list APIs;
+  peer-token authentication and automated provisioning remain pending.
 - LAN discovery through mDNS or UDP broadcast, plus manual IP/port fallback.
 - Peer registry with online/last-seen/capability state and network-change recovery.
 - TLS or an equivalent authenticated local channel; no silent downgrade on paired links.

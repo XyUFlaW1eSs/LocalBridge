@@ -28,13 +28,15 @@ type ServerConfig struct {
 }
 
 type DeviceConfig struct {
-	ID   string `yaml:"id" json:"id"`
-	Name string `yaml:"name" json:"name"`
+	ID           string `yaml:"id" json:"id"`
+	Name         string `yaml:"name" json:"name"`
+	RegistryPath string `yaml:"registry_path" json:"registry_path"`
 }
 
 type SecurityConfig struct {
 	AuthEnabled bool   `yaml:"auth_enabled" json:"auth_enabled"`
 	BearerToken string `yaml:"bearer_token" json:"bearer_token"`
+	PairingCode string `yaml:"pairing_code" json:"pairing_code"`
 }
 
 type ClipboardConfig struct {
@@ -51,7 +53,7 @@ type LoggingConfig struct {
 func Default() Config {
 	return Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
-		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows"},
+		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json"},
 		Security:  SecurityConfig{},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
@@ -149,6 +151,8 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Device.ID = value
 	case "device.name":
 		cfg.Device.Name = value
+	case "device.registry_path":
+		cfg.Device.RegistryPath = value
 	case "security.auth_enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -157,6 +161,8 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Security.AuthEnabled = v
 	case "security.bearer_token":
 		cfg.Security.BearerToken = value
+	case "security.pairing_code":
+		cfg.Security.PairingCode = value
 	case "clipboard.enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -194,6 +200,9 @@ func (c Config) Validate() error {
 	}
 	if c.Device.ID == "" {
 		return errors.New("device.id must not be empty")
+	}
+	if c.Device.RegistryPath == "" {
+		return errors.New("device.registry_path must not be empty")
 	}
 	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
 		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")

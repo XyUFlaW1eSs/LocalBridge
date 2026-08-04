@@ -35,6 +35,8 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/module`: lifecycle and route contract for pluggable features.
 - `internal/eventbus`: in-process decoupling. Subscribers must tolerate dropped events when
   their buffer is full; events are notifications, not a durable queue.
+- `internal/modules/device`: local device identity, explicit pairing and the persisted peer
+  registry. LAN discovery will remain a reachability hint and must not directly grant trust.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
   in a build-tagged adapter.
 

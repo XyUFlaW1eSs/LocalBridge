@@ -137,6 +137,48 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
 {"module":"clipboard","enabled":true,"has_latest":true}
 ```
 
+## Devices and explicit pairing
+
+`GET /api/v1/devices` returns the local device and paired peers. Peer tokens are never included:
+
+```json
+{
+  "local": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "peers": [
+    {
+      "id": "iphone-personal",
+      "name": "iPhone",
+      "address": "192.168.1.20",
+      "port": 8899,
+      "capabilities": ["clipboard.text.push"],
+      "status": "paired",
+      "paired_at": "2026-08-04T00:00:00Z",
+      "last_seen": "2026-08-04T00:00:00Z"
+    }
+  ]
+}
+```
+
+`POST /api/v1/devices/pair` explicitly pairs a peer using the locally configured
+`security.pairing_code`:
+
+```json
+{
+  "code": "one-time-or-local-pairing-code",
+  "id": "iphone-personal",
+  "name": "iPhone",
+  "address": "192.168.1.20",
+  "port": 8899,
+  "capabilities": ["clipboard.text.push", "clipboard.text.pull"]
+}
+```
+
+The response returns the peer metadata and a generated peer token. The token is returned only
+by the pairing response and is not returned by list/get endpoints or written to logs. Pairing
+the same device ID rotates its token. `DELETE /api/v1/devices/{id}` revokes a peer. This Sprint
+stores the registry at `device.registry_path`; encrypted-at-rest storage and automatic token
+provisioning/rotation are later Phase 2 work.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON
@@ -152,6 +194,7 @@ the `X-Request-ID` response header.
 security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
+  pairing_code: "a-local-pairing-code"
 ```
 
 The token is compared in constant time and is never written to logs. This configuration is a

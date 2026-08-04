@@ -8,11 +8,13 @@ server:
 device:
   id: "windows-pc"
   name: "LocalBridge Windows"
+  registry_path: "data/devices.json"
 
 security:
-  # Enable after setting a strong token. Pairing will manage this in a future Phase 2 sprint.
+  # Enable after setting a strong token. Pairing code is required by /api/v1/devices/pair.
   auth_enabled: false
   bearer_token: ""
+  pairing_code: ""
 
 clipboard:
   enabled: true

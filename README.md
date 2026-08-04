@@ -71,6 +71,7 @@ on CI and on other platforms.
 | `internal/config` | YAML configuration and validation |
 | `internal/eventbus` | Typed event names and non-blocking subscriptions |
 | `internal/module` | Stable module lifecycle and route registration |
+- `internal/modules/device` | Device registry, explicit pairing and peer metadata |
 | `internal/server` | Standard-library HTTP server and health API |
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
 | `docs` | Architecture, protocol, deployment and development standards |
@@ -93,6 +94,7 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Coding style](docs/coding-style.md)
 - [Sprint 1 delivery](docs/sprints/sprint-1.md)
 - [Sprint 2.1 delivery](docs/sprints/sprint-2.1.md)
+- [Sprint 2.2 delivery](docs/sprints/sprint-2.2.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)

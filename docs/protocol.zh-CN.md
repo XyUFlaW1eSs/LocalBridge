@@ -130,6 +130,45 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 {"module":"clipboard","enabled":true,"has_latest":true}
 ```
 
+## 设备与显式配对
+
+`GET /api/v1/devices` 返回本地设备和已配对对端。响应不会包含对端 Token：
+
+```json
+{
+  "local": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "peers": [
+    {
+      "id": "iphone-personal",
+      "name": "iPhone",
+      "address": "192.168.1.20",
+      "port": 8899,
+      "capabilities": ["clipboard.text.push"],
+      "status": "paired",
+      "paired_at": "2026-08-04T00:00:00Z",
+      "last_seen": "2026-08-04T00:00:00Z"
+    }
+  ]
+}
+```
+
+`POST /api/v1/devices/pair` 使用本地配置的 `security.pairing_code` 显式配对对端：
+
+```json
+{
+  "code": "configured-local-pairing-code",
+  "id": "iphone-personal",
+  "name": "iPhone",
+  "address": "192.168.1.20",
+  "port": 8899,
+  "capabilities": ["clipboard.text.push", "clipboard.text.pull"]
+}
+```
+
+响应会返回对端元数据和生成的 peer Token。Token 只在配对响应中返回，不会出现在 list/get 响应或日志中。对同一个
+设备 ID 再次配对会轮换 Token。`DELETE /api/v1/devices/{id}` 会撤销对端。本 Sprint 将注册表保存到
+`device.registry_path`；静态加密存储以及自动 Token 配置/轮换属于后续 Phase 2 工作。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；
@@ -143,6 +182,7 @@ Header 中返回同一个值。
 security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
+  pairing_code: "a-local-pairing-code"
 ```
 
 服务端使用常量时间比较 Token，并且不会把 Token 写入日志。这是 Phase 2 的过渡机制；后续配对流程会自动配置和轮换

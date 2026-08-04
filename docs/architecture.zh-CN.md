@@ -32,6 +32,7 @@ iPhone 不运行持久化监听器。Push 和 Pull 是用户主动触发的快�
 - `internal/server`：稳定的 HTTP 服务和系统接口。
 - `internal/module`：可插拔功能的生命周期与路由契约。
 - `internal/eventbus`：进程内解耦。订阅者必须容忍缓冲区满时事件被丢弃；事件是通知，不是持久队列。
+- `internal/modules/device`：本地设备身份、显式配对和持久化对端注册表。局域网发现只能作为可达性提示，不能直接授予信任。
 - `internal/modules/clipboard`：剪贴板领域行为与平台接口。Win32 代码通过构建标签隔离。
 
 ## 生命周期

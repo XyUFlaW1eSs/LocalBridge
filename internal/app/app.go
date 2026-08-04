@@ -12,6 +12,7 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/logger"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/module"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/modules/clipboard"
+	deviceModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/device"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
 )
@@ -31,6 +32,13 @@ func New(cfg config.Config) (*App, error) {
 	log := logger.New(cfg.Logging.Level, cfg.Logging.Format, nil)
 	bus := eventbus.New()
 	manager := module.NewManager()
+	devices, err := deviceModule.New(cfg.Device, cfg.Security, log)
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.Register(devices); err != nil {
+		return nil, err
+	}
 	if cfg.Clipboard.Enabled {
 		if err := manager.Register(clipboard.New(cfg.Clipboard, cfg.Device, bus, log)); err != nil {
 			return nil, err

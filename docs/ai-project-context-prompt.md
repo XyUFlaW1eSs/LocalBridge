@@ -26,8 +26,10 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - Windows uses a Win32 clipboard adapter and a polling watcher. Other platforms use a safe
   no-op adapter so the core remains buildable and testable.
 - Latest clipboard data is memory-only in the current implementation.
-- There is no pairing, authentication, TLS, device registry, peer discovery, persistence,
-  outbound peer delivery, or public-client ecosystem yet.
+- Phase 2.1 added optional Bearer authentication, request IDs and capability discovery.
+- Phase 2.2 added an explicit pairing endpoint and persisted peer registry, but automatic LAN
+  discovery, peer-token authentication, TLS, outbound peer delivery and a public-client
+  ecosystem are not implemented yet.
 - Windows-to-iPhone is currently a Pull flow: Windows updates in-memory latest; the iPhone
   must GET it. Do not claim automatic push until outbound transport and peer registration exist.
 
@@ -39,6 +41,11 @@ actions between trusted devices without requiring a cloud account or vendor rela
   `text/plain`. It returns `{accepted, item}`.
 - `GET /api/v1/clipboard/latest`: returns the latest item directly, or 404 when empty.
 - `GET /api/v1/clipboard/status`: returns module, enabled and has_latest.
+- `GET /api/v1/devices`: lists the local device and paired peers without peer tokens.
+- `GET /api/v1/devices/{id}`: returns one paired peer without its token.
+- `POST /api/v1/devices/pair`: pairs a peer with configured `security.pairing_code` and returns
+  a generated peer token once; re-pairing rotates it.
+- `DELETE /api/v1/devices/{id}`: revokes a peer.
 - Phase 1 default maximum is 1048576 UTF-8 bytes. Hashes are SHA-256; duplicate hashes are
   ignored. Remote writes have a short suppression window to prevent watcher echo.
 - The complete contract is in `docs/clipboard.md` and `docs/protocol.md`.
@@ -51,6 +58,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - `internal/server`: standard-library HTTP server and system endpoints.
 - `internal/module`: stable module lifecycle and route contract.
 - `internal/eventbus`: non-blocking in-process notifications; it is not a durable queue.
+- `internal/modules/device`: explicit pairing and persisted peer registry. Discovery must remain
+  a reachability hint, not authorization.
 - `internal/modules/clipboard`: clipboard domain behavior and platform interface.
 - Planned layers are clients/adapters -> identity/trust/discovery/policy -> transport -> sync
   engine -> feature modules -> storage/observability.
@@ -60,9 +69,10 @@ actions between trusted devices without requiring a cloud account or vendor rela
 
 ## Direction of future work
 
-1. Phase 2 / v0.2.x: configuration hardening, stable errors/request IDs, pairing, authentication,
-   device registry, LAN discovery, diagnostics, shared retries/timeouts, persistence boundary
-   and Windows service/tray design.
+1. Phase 2 / v0.2.x: configuration hardening, LAN discovery, peer-token authentication, token
+   provisioning/rotation, diagnostics, shared retries/timeouts, persistence boundary and
+   Windows service/tray design. Request IDs, capabilities, transition auth, explicit pairing
+   and the peer registry are already partially delivered.
 2. Phase 3 / v0.3.x: generic content envelope, capability negotiation, outbound delivery,
    delivery state, offline queue, history, rich clipboard, images, HTML/RTF and screenshots.
 3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, URL push, image delivery,

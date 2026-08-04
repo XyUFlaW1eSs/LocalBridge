@@ -95,6 +95,7 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 			id = newRequestID()
 		}
 		ctx := context.WithValue(r.Context(), requestIDKey{}, id)
+		r.Header.Set("X-Request-ID", id)
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

@@ -66,6 +66,7 @@ go build ./cmd/localbridge
 | `internal/config` | YAML 配置与校验 |
 | `internal/eventbus` | 类型化事件名与非阻塞订阅 |
 | `internal/module` | 稳定的模块生命周期与路由注册 |
+- `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
 | `internal/server` | 标准库 HTTP 服务与健康接口 |
 | `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
 | `docs` | 架构、协议、部署与开发规范 |
@@ -86,6 +87,7 @@ Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但
 - [编码风格](docs/coding-style.zh-CN.md)
 - [Sprint 1 交付](docs/sprints/sprint-1.zh-CN.md)
 - [Sprint 2.1 交付](docs/sprints/sprint-2.1.zh-CN.md)
+- [Sprint 2.2 交付](docs/sprints/sprint-2.2.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)
