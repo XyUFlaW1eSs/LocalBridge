@@ -67,6 +67,13 @@ enabled, add the same `Authorization: Bearer <token>` header to clipboard and ca
 requests, including the iPhone Shortcut. Every response includes `X-Request-ID`; preserve it
 when reporting a failure.
 
+File management endpoints under `/api/v1/files/` have an additional boundary: with
+`security.auth_enabled: false`, they accept only loopback requests and reject LAN clients with
+`403`. With authentication enabled, use the bearer or paired peer token for management. The
+`/share/<token>` and `/receive/<token>` pages are intentionally public capability URLs for phone
+access; keep their random, expiring URLs inside the trusted LAN. The QR endpoint currently returns
+only a local-rendering URL payload; it does not generate an image yet.
+
 To keep the logs visible in the current PowerShell window, run:
 
 ```powershell

@@ -61,6 +61,18 @@ func TestShareMetadataDownloadRangeAndIdempotency(t *testing.T) {
 	if len(share.Files) != 1 || share.Token == "" || share.Files[0].Name != "hello.txt" {
 		t.Fatalf("unexpected share: %#v", share)
 	}
+	qrResponse, err := http.Get(server.URL + "/api/v1/files/shares/" + share.ID + "/qr")
+	if err != nil || qrResponse.StatusCode != http.StatusOK {
+		t.Fatalf("qr payload failed: err=%v status=%d", err, qrResponse.StatusCode)
+	}
+	var qr QRPayload
+	if err := json.NewDecoder(qrResponse.Body).Decode(&qr); err != nil {
+		t.Fatal(err)
+	}
+	_ = qrResponse.Body.Close()
+	if qr.Version != 1 || qr.Type != "localbridge.share" || !strings.Contains(qr.URL, "/share/"+share.Token) {
+		t.Fatalf("unexpected qr payload: %#v", qr)
+	}
 
 	request, _ = http.NewRequest(http.MethodPost, server.URL+"/api/v1/files/shares", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -102,6 +114,16 @@ func TestShareMetadataDownloadRangeAndIdempotency(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusPartialContent || string(readBytes(response)) != "resumable" {
 		t.Fatalf("range response status=%d body=%q", response.StatusCode, readBody(response))
+	}
+	if err := os.WriteFile(source, []byte("HELLO resumable world"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := http.Get(server.URL + "/share/" + share.Token + "/files/" + share.Files[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.StatusCode != http.StatusGone {
+		t.Fatalf("changed source should be rejected, got %d body=%s", changed.StatusCode, readBody(changed))
 	}
 }
 
@@ -150,6 +172,48 @@ func TestReceiveContentRangeResumeReplayAndPersistence(t *testing.T) {
 	}
 }
 
+func TestRecoverCompletedUploadAfterRenameCrash(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver, err := store.CreateReceiver(time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("recover me")
+	digest := sha256.Sum256(content)
+	upload, err := store.CreateUpload(receiver.Token, "crash.txt", int64(len(content)), hex.EncodeToString(digest[:]), "crash-1", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.partPath(upload.ID), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	persisted := store.uploads[upload.ID]
+	persisted.ReceivedBytes = persisted.Size
+	store.uploads[upload.ID] = persisted
+	if err := store.saveLocked(); err != nil {
+		store.mu.Unlock()
+		t.Fatal(err)
+	}
+	store.mu.Unlock()
+	if err := os.Rename(store.partPath(upload.ID), store.finalPath(upload.ID, upload.Name)); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, ok := reloaded.GetUpload(upload.ID)
+	if !ok || recovered.Status != uploadStatusDone || len(reloaded.ListReceives()) != 1 {
+		t.Fatalf("rename crash was not recovered: upload=%#v ok=%v receives=%#v", recovered, ok, reloaded.ListReceives())
+	}
+}
+
 func TestReceiveHTTPRejectsTraversalAndBadRanges(t *testing.T) {
 	cfg := testConfig(t)
 	store, err := NewStore(cfg)
@@ -164,6 +228,21 @@ func TestReceiveHTTPRejectsTraversalAndBadRanges(t *testing.T) {
 	receiver, err := store.CreateReceiver(time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
+	}
+	receivePage, err := http.Get(server.URL + "/receive/" + receiver.Token)
+	if err != nil || receivePage.StatusCode != http.StatusOK {
+		t.Fatalf("receive page failed: err=%v status=%d", err, receivePage.StatusCode)
+	}
+	receiveHTML := readBody(receivePage)
+	if !strings.Contains(receiveHTML, "Idempotency-Key") || strings.Contains(receiveHTML, "await file.arrayBuffer()") {
+		t.Fatal("receive page does not expose resumable upload behavior without whole-file hashing")
+	}
+	remote := httptest.NewRequest(http.MethodGet, "/api/v1/files/shares", nil)
+	remote.RemoteAddr = "192.168.1.77:54321"
+	remoteRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(remoteRecorder, remote)
+	if remoteRecorder.Code != http.StatusForbidden {
+		t.Fatalf("remote management request should be forbidden, got %d body=%s", remoteRecorder.Code, remoteRecorder.Body.String())
 	}
 	body, _ := json.Marshal(map[string]any{"name": "../escape.txt", "size": 4})
 	response, err := http.Post(server.URL+"/receive/"+receiver.Token+"/uploads", "application/json", bytes.NewReader(body))
@@ -184,6 +263,11 @@ func TestReceiveHTTPRejectsTraversalAndBadRanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = response.Body.Close()
+	statusResponse, err := http.Get(server.URL + "/receive/" + receiver.Token + "/uploads/" + upload.ID)
+	if err != nil || statusResponse.StatusCode != http.StatusOK {
+		t.Fatalf("upload status failed: err=%v status=%d", err, statusResponse.StatusCode)
+	}
+	_ = statusResponse.Body.Close()
 	request, _ := http.NewRequest(http.MethodPut, server.URL+"/receive/"+receiver.Token+"/uploads/"+upload.ID, strings.NewReader("abcd"))
 	request.Header.Set("Content-Range", "bytes 2-5/4")
 	response, err = http.DefaultClient.Do(request)

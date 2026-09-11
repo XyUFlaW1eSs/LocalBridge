@@ -98,6 +98,15 @@ func requestLogging(logger *slog.Logger, next http.Handler) http.Handler {
 }
 
 type requestIDKey struct{}
+type authenticatedKey struct{}
+
+// Authenticated reports whether the request passed the configured global or
+// peer bearer-token check. Feature modules can use this to distinguish an
+// authenticated LAN request from an unauthenticated loopback request.
+func Authenticated(r *http.Request) bool {
+	value, _ := r.Context().Value(authenticatedKey{}).(bool)
+	return value
+}
 
 func requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +168,8 @@ func authentication(s *Server, next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid authentication token", requestIDFrom(r))
 			return
 		}
-		next.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), authenticatedKey{}, true)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

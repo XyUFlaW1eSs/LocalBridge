@@ -105,3 +105,23 @@ func TestPublicPathPrefixStillRequiresCapabilityHandler(t *testing.T) {
 		t.Fatalf("management path should remain protected, got %d", protected.Code)
 	}
 }
+
+func TestAuthenticatedContextMarker(t *testing.T) {
+	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), func(mux *http.ServeMux) {
+		mux.HandleFunc("GET /api/v1/test-auth-context", func(w http.ResponseWriter, r *http.Request) {
+			if !Authenticated(r) {
+				writeError(w, http.StatusForbidden, "missing auth marker", requestIDFrom(r))
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+	})
+	s.SetAuthToken("0123456789abcdef")
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/test-auth-context", nil)
+	request.Header.Set("Authorization", "Bearer 0123456789abcdef")
+	recorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("authenticated context marker missing, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}

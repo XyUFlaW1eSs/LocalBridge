@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 )
 
 type Module struct {
@@ -63,6 +65,7 @@ func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/files/shares", m.handleDeleteAllShares)
 	mux.HandleFunc("GET /api/v1/files/shares/{id}", m.handleGetShare)
 	mux.HandleFunc("DELETE /api/v1/files/shares/{id}", m.handleDeleteShare)
+	mux.HandleFunc("GET /api/v1/files/shares/{id}/qr", m.handleShareQR)
 	mux.HandleFunc("GET /api/v1/files/receivers", m.handleListReceivers)
 	mux.HandleFunc("POST /api/v1/files/receivers", m.handleCreateReceiver)
 	mux.HandleFunc("GET /api/v1/files/receives", m.handleListReceives)
@@ -75,14 +78,21 @@ func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /receive/{token}", m.handlePublicReceiver)
 	mux.HandleFunc("GET /receive/{token}/metadata", m.handlePublicReceiverMetadata)
 	mux.HandleFunc("POST /receive/{token}/uploads", m.handleCreateUpload)
+	mux.HandleFunc("GET /receive/{token}/uploads/{uploadID}", m.handleGetUpload)
 	mux.HandleFunc("PUT /receive/{token}/uploads/{uploadID}", m.handleUploadChunk)
 }
 
 func (m *Module) handleListShares(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"shares": m.store.ListShares(time.Now().UTC())})
 }
 
 func (m *Module) handleCreateShare(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	body := http.MaxBytesReader(w, r.Body, 256*1024)
 	var request createShareRequest
 	if err := json.NewDecoder(body).Decode(&request); err != nil || len(request.Files) == 0 {
@@ -112,6 +122,9 @@ func (m *Module) handleCreateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Module) handleGetShare(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	share, ok := m.store.GetShare(strings.TrimSpace(r.PathValue("id")), time.Now().UTC())
 	if !ok {
 		writeError(w, http.StatusNotFound, "file share not found", requestID(r))
@@ -120,7 +133,22 @@ func (m *Module) handleGetShare(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, share)
 }
 
+func (m *Module) handleShareQR(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
+	share, ok := m.store.ShareCapability(strings.TrimSpace(r.PathValue("id")), time.Now().UTC())
+	if !ok {
+		writeError(w, http.StatusNotFound, "file share not found or expired", requestID(r))
+		return
+	}
+	writeJSON(w, http.StatusOK, QRPayload{Version: 1, Type: "localbridge.share", URL: publicURL(r, "/share/"+share.Token), ExpiresAt: share.ExpiresAt})
+}
+
 func (m *Module) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	if err := m.store.DeleteShare(strings.TrimSpace(r.PathValue("id"))); err != nil {
 		writeError(w, http.StatusNotFound, "file share not found", requestID(r))
 		return
@@ -129,6 +157,9 @@ func (m *Module) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Module) handleDeleteAllShares(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	if err := m.store.DeleteAllShares(); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to clear file shares", requestID(r))
 		return
@@ -137,10 +168,16 @@ func (m *Module) handleDeleteAllShares(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Module) handleListReceivers(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"receivers": m.store.ListReceivers(time.Now().UTC())})
 }
 
 func (m *Module) handleCreateReceiver(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	receiver, err := m.store.CreateReceiver(time.Now().UTC())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create receive link", requestID(r))
@@ -151,10 +188,16 @@ func (m *Module) handleCreateReceiver(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Module) handleListReceives(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"receives": m.store.ListReceives()})
 }
 
 func (m *Module) handleDeleteReceive(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
 	if err := m.store.DeleteReceive(strings.TrimSpace(r.PathValue("id"))); err != nil {
 		writeError(w, http.StatusNotFound, "received file not found", requestID(r))
 		return
@@ -196,15 +239,26 @@ func (m *Module) handleDownload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "file not found or share expired", requestID(r))
 		return
 	}
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		writeError(w, http.StatusGone, "source file is no longer available", requestID(r))
+		return
+	}
 	content, err := os.Open(path)
 	if err != nil {
 		writeError(w, http.StatusGone, "source file is no longer available", requestID(r))
 		return
 	}
 	defer content.Close()
-	info, err := content.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() != file.Size {
+	openedInfo, err := content.Stat()
+	latestInfo, latestErr := os.Lstat(path)
+	if err != nil || latestErr != nil || latestInfo.Mode()&os.ModeSymlink != 0 || !latestInfo.Mode().IsRegular() || !openedInfo.Mode().IsRegular() || openedInfo.Size() != file.Size || latestInfo.Size() != file.Size {
 		writeError(w, http.StatusGone, "source file changed or is unavailable", requestID(r))
+		return
+	}
+	digest, err := hashOpenFile(content)
+	if err != nil || !constantTokenEqual(digest, file.SHA256) {
+		writeError(w, http.StatusGone, "source file content changed", requestID(r))
 		return
 	}
 	w.Header().Set("Content-Type", file.MIMEType)
@@ -263,6 +317,16 @@ func (m *Module) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, upload)
+}
+
+func (m *Module) handleGetUpload(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.PathValue("token"))
+	upload, ok := m.store.GetUploadForToken(token, strings.TrimSpace(r.PathValue("uploadID")), time.Now().UTC())
+	if !ok {
+		writeError(w, http.StatusNotFound, "upload not found or expired", requestID(r))
+		return
+	}
+	writeJSON(w, http.StatusOK, upload)
 }
 
 func (m *Module) handleUploadChunk(w http.ResponseWriter, r *http.Request) {
@@ -383,8 +447,8 @@ var sharePage = template.Must(template.New("share").Parse(`<!doctype html>
 var receiverPage = template.Must(template.New("receiver").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LocalBridge receive</title><style>body{font:17px system-ui,sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#17202a;background:#f6f8fa}main{background:#fff;border-radius:16px;padding:22px;box-shadow:0 4px 18px #0001}input,button{font:inherit;padding:10px;margin:8px 0;width:100%}progress{width:100%;height:20px}.meta{color:#5f6b76;font-size:14px}</style></head><body><main><h1>LocalBridge</h1><p>Select files to send to this Windows device.</p><input id="files" type="file" multiple><button id="send">Send files</button><p id="status" class="meta"></p><progress id="progress" value="0" max="1" hidden></progress></main><script>
 const base={{printf "%q" .Base}}; const chunk=4*1024*1024; const input=document.querySelector('#files'); const status=document.querySelector('#status'); const progress=document.querySelector('#progress');
-async function digest(file){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function sendFile(file){const hash=await digest(file); const startResponse=await fetch(base+'/uploads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,size:file.size,sha256:hash})}); if(!startResponse.ok) throw new Error(await startResponse.text()); const upload=await startResponse.json(); for(let offset=0;offset<file.size;){const end=Math.min(offset+chunk,file.size); const part=await file.slice(offset,end).arrayBuffer(); const response=await fetch(base+'/uploads/'+upload.id,{method:'PUT',headers:{'Content-Range':'bytes '+offset+'-'+(end-1)+'/'+file.size,},body:part}); if(!response.ok) throw new Error(await response.text()); const state=await response.json(); offset=state.received_bytes; progress.value=offset/file.size;}}
+async function uploadKey(file){const raw=new TextEncoder().encode(base+'|'+file.name+'|'+file.size+'|'+file.lastModified); const digest=await crypto.subtle.digest('SHA-256',raw); return 'lb-'+[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function sendFile(file){const key=await uploadKey(file); const storageKey='localbridge-upload:'+key; let upload=null; const saved=localStorage.getItem(storageKey); if(saved){const stateResponse=await fetch(base+'/uploads/'+encodeURIComponent(saved)); if(stateResponse.ok) upload=await stateResponse.json();} if(!upload){const startResponse=await fetch(base+'/uploads',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name:file.name,size:file.size})}); if(!startResponse.ok) throw new Error(await startResponse.text()); upload=await startResponse.json(); localStorage.setItem(storageKey,upload.id);} for(let offset=upload.received_bytes;offset<file.size;){const end=Math.min(offset+chunk,file.size); const part=await file.slice(offset,end).arrayBuffer(); const response=await fetch(base+'/uploads/'+upload.id,{method:'PUT',headers:{'Content-Range':'bytes '+offset+'-'+(end-1)+'/'+file.size},body:part}); if(!response.ok) throw new Error(await response.text()); const state=await response.json(); offset=state.received_bytes; progress.value=offset/file.size;} localStorage.removeItem(storageKey)}
 document.querySelector('#send').onclick=async()=>{const files=[...input.files]; if(!files.length){status.textContent='Choose at least one file.';return} progress.hidden=false; try{for(const file of files){status.textContent='Sending '+file.name;progress.value=0;await sendFile(file)} status.textContent='Transfer complete.'}catch(error){status.textContent='Transfer failed: '+error.message}};
 </script></main></body></html>`))
 
@@ -397,3 +461,21 @@ func writeError(w http.ResponseWriter, status int, message, requestID string) {
 	writeJSON(w, status, map[string]string{"error": message, "request_id": requestID})
 }
 func requestID(r *http.Request) string { return strings.TrimSpace(r.Header.Get("X-Request-ID")) }
+
+func (m *Module) allowManagement(w http.ResponseWriter, r *http.Request) bool {
+	if server.Authenticated(r) || requestIsLoopback(r) {
+		return true
+	}
+	writeError(w, http.StatusForbidden, "file management requires loopback or authentication", requestID(r))
+	return false
+}
+
+func requestIsLoopback(r *http.Request) bool {
+	host := strings.TrimSpace(r.RemoteAddr)
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.Trim(host, "[]")
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}

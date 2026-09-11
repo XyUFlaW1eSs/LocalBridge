@@ -216,6 +216,9 @@ state transitions, retention and limitations.
 
 The file module stores metadata in `files.store_path` and received bytes below `files.receive_dir`.
 Management routes require the configured bearer or peer token when authentication is enabled.
+When `security.auth_enabled` is false, all `/api/v1/files/...` management operations are still
+restricted to loopback requests and return `403` to LAN clients; public capability URLs remain
+available to phones. Do not treat a disabled bearer token as permission to manage files remotely.
 `POST /api/v1/files/shares` accepts `{"files":[{"path":"C:\\Users\\me\\file.txt"}]}` and creates
 one share record for a multi-file selection. `GET /api/v1/files/shares` lists records without source
 paths or tokens; `DELETE /api/v1/files/shares/{id}` clears one and `DELETE /api/v1/files/shares`
@@ -237,6 +240,22 @@ are limited to 16 MiB and must be contiguous. Replaying an already stored range 
 is idempotent; gaps or conflicting replays return `409`. Completion verifies the declared SHA-256
 before moving the generated temporary file into `files.receive_dir`. Upload creation also supports
 `Idempotency-Key`.
+
+`GET /receive/{token}/uploads/{upload_id}` returns the current `received_bytes`, `status` and
+metadata after validating the receive token. Clients can use it after a timeout or restart to
+continue at the committed offset. The built-in mobile page derives a stable idempotency key from
+the receive URL and file identity, keeps the upload ID in `localStorage`, and resumes from this
+status endpoint. It does not load the entire file into memory to calculate a client-side hash;
+the server hashes the completed file instead.
+
+`GET /api/v1/files/shares/{id}/qr` is a renderer-neutral QR data contract, not a QR image endpoint:
+
+```json
+{"version":1,"type":"localbridge.share","url":"http://192.168.1.10:8899/share/<token>","expires_at":"..."}
+```
+
+The GUI must encode `url` locally when QR rendering is added. This sprint intentionally does not
+claim offline QR image generation.
 
 Security limits are enforced before storage: sources must be regular non-symlink files; per-file,
 per-share, receive-quota and file-count limits come from `files.*`; upload names cannot contain path

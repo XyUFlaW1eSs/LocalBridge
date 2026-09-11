@@ -149,6 +149,17 @@ func (s *Store) GetShare(id string, now time.Time) (Share, bool) {
 	return publicShare(record, false), true
 }
 
+func (s *Store) ShareCapability(id string, now time.Time) (Share, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.expireLocked(now)
+	record, ok := s.shares[id]
+	if !ok || record.Status != shareStatusActive {
+		return Share{}, false
+	}
+	return publicShare(record, true), true
+}
+
 func (s *Store) DeleteShare(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -408,6 +419,31 @@ func (s *Store) GetUpload(id string) (Upload, bool) {
 	return upload, ok
 }
 
+func (s *Store) GetUploadForToken(token, id string, now time.Time) (Upload, bool) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	upload, ok := s.uploads[id]
+	if !ok {
+		return Upload{}, false
+	}
+	receiver, ok := s.receivers[upload.ReceiverID]
+	if !ok || receiver.Status != shareStatusActive || !constantTokenEqual(receiver.Token, token) {
+		return Upload{}, false
+	}
+	if upload.Status == uploadStatusActive && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
+		upload.Status = uploadStatusFailed
+		upload.Error = "upload expired"
+		upload.UpdatedAt = now
+		s.uploads[id] = upload
+		_ = s.saveLocked()
+		return Upload{}, false
+	}
+	return upload, true
+}
+
 func (s *Store) DeleteReceive(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -497,6 +533,9 @@ func (s *Store) load() error {
 	if state.Version != stateVersion {
 		return fmt.Errorf("unsupported files store version: %d", state.Version)
 	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close files store: %w", err)
+	}
 	for _, share := range state.Shares {
 		if validID(share.ID) && validID(share.Token) && len(share.Files) <= s.cfg.MaxFilesPerShare {
 			s.shares[share.ID] = share
@@ -517,7 +556,116 @@ func (s *Store) load() error {
 			s.receives[record.ID] = record
 		}
 	}
+	changed, err := s.recoverUploads()
+	if err != nil {
+		return err
+	}
+	if changed {
+		if err := s.saveLocked(); err != nil {
+			return fmt.Errorf("persist recovered uploads: %w", err)
+		}
+	}
 	return nil
+}
+
+func (s *Store) recoverUploads() (bool, error) {
+	changed := false
+	now := time.Now().UTC()
+	for id, upload := range s.uploads {
+		if upload.Status != uploadStatusActive {
+			continue
+		}
+		if upload.ReceivedBytes < 0 || upload.ReceivedBytes > upload.Size {
+			upload.Status = uploadStatusFailed
+			upload.Error = "invalid upload offset after restart"
+			upload.UpdatedAt = now
+			s.uploads[id] = upload
+			changed = true
+			continue
+		}
+		partPath := s.partPath(id)
+		if upload.ReceivedBytes < upload.Size {
+			info, err := os.Stat(partPath)
+			if errors.Is(err, os.ErrNotExist) {
+				if upload.ReceivedBytes > 0 {
+					upload.Status = uploadStatusFailed
+					upload.Error = "partial upload data missing after restart"
+					upload.UpdatedAt = now
+					s.uploads[id] = upload
+					changed = true
+				}
+				continue
+			}
+			if err != nil {
+				return false, fmt.Errorf("inspect upload part %s: %w", id, err)
+			}
+			if !info.Mode().IsRegular() || info.Size() < upload.ReceivedBytes {
+				upload.Status = uploadStatusFailed
+				upload.Error = "partial upload data is invalid after restart"
+				upload.UpdatedAt = now
+				s.uploads[id] = upload
+				changed = true
+				continue
+			}
+			if info.Size() != upload.ReceivedBytes {
+				file, err := os.OpenFile(partPath, os.O_WRONLY, 0600)
+				if err != nil {
+					return false, fmt.Errorf("truncate upload part %s: %w", id, err)
+				}
+				err = file.Truncate(upload.ReceivedBytes)
+				closeErr := file.Close()
+				if err != nil {
+					return false, fmt.Errorf("truncate upload part %s: %w", id, err)
+				}
+				if closeErr != nil {
+					return false, fmt.Errorf("close upload part %s: %w", id, closeErr)
+				}
+			}
+			continue
+		}
+
+		finalPath := s.finalPath(id, upload.Name)
+		candidate := finalPath
+		info, err := os.Stat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			info, err = os.Stat(partPath)
+			if err == nil && info.Mode().IsRegular() && info.Size() == upload.Size {
+				if err := os.Rename(partPath, finalPath); err != nil {
+					return false, fmt.Errorf("recover upload %s: %w", id, err)
+				}
+				info, err = os.Stat(finalPath)
+			}
+			candidate = finalPath
+		}
+		if err != nil || !info.Mode().IsRegular() || info.Size() != upload.Size {
+			upload.Status = uploadStatusFailed
+			upload.Error = "completed upload data is missing after restart"
+			upload.UpdatedAt = now
+			s.uploads[id] = upload
+			changed = true
+			continue
+		}
+		digest, err := fileSHA256(candidate)
+		if err != nil {
+			return false, fmt.Errorf("hash recovered upload %s: %w", id, err)
+		}
+		if upload.SHA256 != "" && !constantTokenEqual(upload.SHA256, digest) {
+			upload.Status = uploadStatusFailed
+			upload.Error = "recovered upload sha256 mismatch"
+			upload.UpdatedAt = now
+			s.uploads[id] = upload
+			changed = true
+			continue
+		}
+		completed := now
+		upload.Status = uploadStatusDone
+		upload.CompletedAt = &completed
+		upload.UpdatedAt = now
+		s.uploads[id] = upload
+		s.receives[id] = ReceiveRecord{ID: id, UploadID: id, Name: upload.Name, Size: upload.Size, SHA256: digest, Path: candidate, CreatedAt: upload.CreatedAt, CompletedAt: &completed}
+		changed = true
+	}
+	return changed, nil
 }
 
 func (s *Store) saveLocked() error {
@@ -561,7 +709,15 @@ func (s *Store) saveLocked() error {
 		return fmt.Errorf("write files store: %w", err)
 	}
 	if err := os.Rename(tmpName, s.path); err != nil {
-		return fmt.Errorf("replace files store: %w", err)
+		// Windows cannot rename over an existing file. The destination is the
+		// store's own state file, so remove it only after the atomic rename path
+		// has failed, then retry the replacement.
+		if removeErr := os.Remove(s.path); removeErr != nil {
+			return fmt.Errorf("replace files store: %w (remove existing: %v)", err, removeErr)
+		}
+		if retryErr := os.Rename(tmpName, s.path); retryErr != nil {
+			return fmt.Errorf("replace files store after removing existing: %w", retryErr)
+		}
 	}
 	return nil
 }
@@ -673,8 +829,18 @@ func fileSHA256(path string) (string, error) {
 		return "", err
 	}
 	defer file.Close()
+	return hashOpenFile(file)
+}
+
+func hashOpenFile(file *os.File) (string, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil

@@ -30,6 +30,15 @@ type Share struct {
 	URL       string    `json:"url,omitempty"`
 }
 
+// QRPayload is the stable, renderer-neutral contract for a future QR image.
+// The GUI can encode URL as-is without depending on a network QR service.
+type QRPayload struct {
+	Version   int       `json:"version"`
+	Type      string    `json:"type"`
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type Receiver struct {
 	ID        string    `json:"id"`
 	Token     string    `json:"token,omitempty"`

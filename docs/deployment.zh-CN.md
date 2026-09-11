@@ -60,6 +60,11 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 健康检查有意保持免认证，以便本地诊断。启用认证后，剪贴板和能力请求（包括 iPhone 快捷指令）都必须添加同一个
 `Authorization: Bearer <token>` Header。每个响应都会包含 `X-Request-ID`；报告故障时请保留该值。
 
+`/api/v1/files/` 下的文件管理接口还有额外边界：当 `security.auth_enabled: false` 时，只接受回环请求，来自局域网
+的管理请求返回 `403`；启用认证后，管理操作必须使用 Bearer Token 或已配对的 peer Token。`/share/<token>` 和
+`/receive/<token>` 页面是供手机访问的公开能力 URL，请只在可信局域网内使用随机且会过期的链接。当前二维码接口只返回
+供本地渲染的 URL 数据，不生成二维码图片。
+
 需要持续查看日志时，请在 PowerShell 中运行：
 
 ```powershell
