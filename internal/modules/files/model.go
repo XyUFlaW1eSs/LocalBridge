@@ -77,6 +77,7 @@ type ReceiveRecord struct {
 type storedFile struct {
 	File
 	SourcePath string `json:"source_path"`
+	Owned      bool   `json:"owned,omitempty"`
 }
 
 type storedShare struct {

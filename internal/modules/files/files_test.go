@@ -201,6 +201,108 @@ func TestBrowserMultipartCreatesSingleShareWithoutPathLeak(t *testing.T) {
 	}
 }
 
+func TestShareLifecycleCleansOwnedFilesWithoutDeletingNativeSources(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownedPath := filepath.Join(cfg.ShareDir, "owned", "browser.txt")
+	if err := os.MkdirAll(filepath.Dir(ownedPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ownedPath, []byte("browser"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	nativePath := filepath.Join(t.TempDir(), "native.txt")
+	if err := os.WriteFile(nativePath, []byte("native"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	owned, err := store.CreateOwnedShare([]string{ownedPath}, "owned-share", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, err := store.CreateShare([]string{nativePath}, "native-share", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteShare(owned.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ownedPath); !os.IsNotExist(err) {
+		t.Fatalf("owned browser file survived deletion: %v", err)
+	}
+	if _, err := os.Stat(nativePath); err != nil {
+		t.Fatalf("native source was deleted with share: %v", err)
+	}
+	if err := store.DeleteAllShares(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(nativePath); err != nil {
+		t.Fatalf("native source was deleted by clear-all: %v", err)
+	}
+	if _, ok := store.GetShare(native.ID, time.Now().UTC()); ok {
+		t.Fatal("clear-all left a native share record")
+	}
+}
+
+func TestExpiredOwnedShareReclaimsFilesAndRestartRemovesTemps(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.MkdirAll(cfg.ShareDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	staleTemp := filepath.Join(cfg.ShareDir, ".localbridge-share-stale.upload")
+	if err := os.WriteFile(staleTemp, []byte("partial"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(staleTemp); !os.IsNotExist(err) {
+		t.Fatalf("stale browser temporary file survived restart: %v", err)
+	}
+	ownedPath := filepath.Join(cfg.ShareDir, "expired", "expired.txt")
+	if err := os.MkdirAll(filepath.Dir(ownedPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ownedPath, []byte("expired"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	nativePath := filepath.Join(t.TempDir(), "expired-native.txt")
+	if err := os.WriteFile(nativePath, []byte("native"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().Add(-2 * time.Hour)
+	owned, err := store.CreateOwnedShare([]string{ownedPath}, "expired-owned", old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateShare([]string{nativePath}, "expired-native", old); err != nil {
+		t.Fatal(err)
+	}
+	shares := store.ListShares(time.Now().UTC())
+	if len(shares) != 2 || owned.Status != shareStatusActive {
+		t.Fatalf("unexpected expired share listing: %#v", shares)
+	}
+	if _, err := os.Stat(ownedPath); !os.IsNotExist(err) {
+		t.Fatalf("expired owned file survived cleanup: %v", err)
+	}
+	if _, err := os.Stat(nativePath); err != nil {
+		t.Fatalf("expired native source was deleted: %v", err)
+	}
+	reloaded, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.ListShares(time.Now().UTC())) != 2 {
+		t.Fatal("expired share records were not persisted across restart")
+	}
+	if _, err := os.Stat(ownedPath); !os.IsNotExist(err) {
+		t.Fatalf("expired owned file reappeared after restart: %v", err)
+	}
+}
+
 func TestReceiveContentRangeResumeReplayAndPersistence(t *testing.T) {
 	cfg := testConfig(t)
 	store, err := NewStore(cfg)

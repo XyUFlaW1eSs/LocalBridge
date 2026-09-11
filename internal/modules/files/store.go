@@ -61,6 +61,9 @@ func NewStore(cfg config.FilesConfig) (*Store, error) {
 	if err := os.MkdirAll(shareDir, 0700); err != nil {
 		return nil, fmt.Errorf("create files share directory: %w", err)
 	}
+	if err := cleanupBrowserTemps(shareDir); err != nil {
+		return nil, err
+	}
 	s := &Store{cfg: cfg, path: storePath, shareDir: shareDir, receiveDir: receiveDir, shares: make(map[string]storedShare), receivers: make(map[string]Receiver), uploads: make(map[string]Upload), receives: make(map[string]ReceiveRecord)}
 	if err := s.load(); err != nil {
 		return nil, err
@@ -69,6 +72,16 @@ func NewStore(cfg config.FilesConfig) (*Store, error) {
 }
 
 func (s *Store) CreateShare(paths []string, idempotencyKey string, now time.Time) (Share, error) {
+	return s.createShare(paths, idempotencyKey, now, false)
+}
+
+// CreateOwnedShare creates a share from files owned by the store. Those files
+// are eligible for cleanup when the share is deleted or expires.
+func (s *Store) CreateOwnedShare(paths []string, idempotencyKey string, now time.Time) (Share, error) {
+	return s.createShare(paths, idempotencyKey, now, true)
+}
+
+func (s *Store) createShare(paths []string, idempotencyKey string, now time.Time, owned bool) (Share, error) {
 	if len(paths) == 0 || len(paths) > s.cfg.MaxFilesPerShare {
 		return Share{}, fmt.Errorf("share must contain between 1 and %d files", s.cfg.MaxFilesPerShare)
 	}
@@ -105,6 +118,10 @@ func (s *Store) CreateShare(paths []string, idempotencyKey string, now time.Time
 		}
 		total += file.Size
 		file.SourcePath = path
+		file.Owned = owned
+		if owned && !s.isControlledSharePath(path) {
+			return Share{}, errors.New("owned share file must be inside the configured share directory")
+		}
 		files = append(files, file)
 	}
 	id, err := randomID()
@@ -183,8 +200,12 @@ func (s *Store) ShareByIdempotencyKey(key string, now time.Time) (Share, bool) {
 func (s *Store) DeleteShare(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.shares[id]; !ok {
+	share, ok := s.shares[id]
+	if !ok {
 		return os.ErrNotExist
+	}
+	if err := s.cleanupOwnedShareLocked(&share); err != nil {
+		return err
 	}
 	delete(s.shares, id)
 	return s.saveLocked()
@@ -193,6 +214,11 @@ func (s *Store) DeleteShare(id string) error {
 func (s *Store) DeleteAllShares() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for id, share := range s.shares {
+		if err := s.cleanupOwnedShareLocked(&share); err != nil {
+			return fmt.Errorf("cleanup share %s: %w", id, err)
+		}
+	}
 	s.shares = make(map[string]storedShare)
 	return s.saveLocked()
 }
@@ -489,13 +515,24 @@ func (s *Store) DeleteReceive(id string) error {
 	return s.saveLocked()
 }
 
-func (s *Store) expireLocked(now time.Time) {
+func (s *Store) expireLocked(now time.Time) bool {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	changed := false
 	for id, share := range s.shares {
 		if !share.ExpiresAt.After(now) && share.Status == shareStatusActive {
 			share.Status = shareStatusExpired
+			changed = true
+		}
+		if share.Status == shareStatusExpired {
+			hadOwnedFiles := hasOwnedFiles(share)
+			_ = s.cleanupOwnedShareLocked(&share)
+			if hadOwnedFiles && !hasOwnedFiles(share) {
+				changed = true
+			}
+		}
+		if changed {
 			s.shares[id] = share
 		}
 	}
@@ -503,6 +540,7 @@ func (s *Store) expireLocked(now time.Time) {
 		if !receiver.ExpiresAt.After(now) && receiver.Status == shareStatusActive {
 			receiver.Status = shareStatusExpired
 			s.receivers[id] = receiver
+			changed = true
 		}
 	}
 	for id, upload := range s.uploads {
@@ -511,8 +549,10 @@ func (s *Store) expireLocked(now time.Time) {
 			upload.Error = "upload expired"
 			upload.UpdatedAt = now
 			s.uploads[id] = upload
+			changed = true
 		}
 	}
+	return changed
 }
 
 func (s *Store) receivedBytesLocked() int64 {
@@ -754,6 +794,66 @@ func (s *Store) saveLocked() error {
 }
 
 func (s *Store) partPath(id string) string { return filepath.Join(s.receiveDir, "."+id+".part") }
+
+func cleanupBrowserTemps(shareDir string) error {
+	entries, err := os.ReadDir(shareDir)
+	if err != nil {
+		return fmt.Errorf("inspect browser share temporary files: %w", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, ".localbridge-share-") || !strings.HasSuffix(name, ".upload") {
+			continue
+		}
+		if err := os.Remove(filepath.Join(shareDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove browser share temporary file: %w", err)
+		}
+	}
+	return nil
+}
+
+func hasOwnedFiles(share storedShare) bool {
+	for _, file := range share.Files {
+		if file.Owned {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) cleanupOwnedShareLocked(share *storedShare) error {
+	for i := range share.Files {
+		file := &share.Files[i]
+		if !file.Owned {
+			continue
+		}
+		if !s.isControlledSharePath(file.SourcePath) {
+			return errors.New("owned share file is outside the configured share directory")
+		}
+		if err := os.Remove(file.SourcePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove owned share file: %w", err)
+		}
+		parent := filepath.Dir(file.SourcePath)
+		if rel, err := filepath.Rel(s.shareDir, parent); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			_ = os.Remove(parent)
+		}
+		file.Owned = false
+		file.SourcePath = ""
+	}
+	return nil
+}
+
+func (s *Store) isControlledSharePath(rawPath string) bool {
+	path, err := filepath.Abs(filepath.Clean(rawPath))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(s.shareDir, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
 
 func (s *Store) sharePath(id, name string) string {
 	return filepath.Join(s.shareDir, id, filepath.Base(name))

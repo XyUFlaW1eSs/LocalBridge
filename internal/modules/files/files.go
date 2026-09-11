@@ -187,7 +187,7 @@ func (m *Module) handleCreateBrowserShare(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusInternalServerError, "failed to allocate browser share file", requestID(r))
 			return
 		}
-		tempPath := filepath.Join(m.store.shareDir, "."+id+".upload")
+		tempPath := filepath.Join(m.store.shareDir, ".localbridge-share-"+id+".upload")
 		file, openErr := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		if openErr != nil {
 			_ = part.Close()
@@ -227,7 +227,7 @@ func (m *Module) handleCreateBrowserShare(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "files must be a non-empty multipart selection", requestID(r))
 		return
 	}
-	share, err := m.store.CreateShare(paths, idempotencyKey, time.Now().UTC())
+	share, err := m.store.CreateOwnedShare(paths, idempotencyKey, time.Now().UTC())
 	if err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "exceeds") {
