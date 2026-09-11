@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -10,12 +11,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
+	"github.com/skip2/go-qrcode"
 )
 
 type Module struct {
@@ -62,10 +65,12 @@ func (m *Module) Stop(context.Context) error  { m.logger.Info("files module stop
 func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/files/shares", m.handleListShares)
 	mux.HandleFunc("POST /api/v1/files/shares", m.handleCreateShare)
+	mux.HandleFunc("POST /api/v1/files/browser-shares", m.handleCreateBrowserShare)
 	mux.HandleFunc("DELETE /api/v1/files/shares", m.handleDeleteAllShares)
 	mux.HandleFunc("GET /api/v1/files/shares/{id}", m.handleGetShare)
 	mux.HandleFunc("DELETE /api/v1/files/shares/{id}", m.handleDeleteShare)
 	mux.HandleFunc("GET /api/v1/files/shares/{id}/qr", m.handleShareQR)
+	mux.HandleFunc("GET /api/v1/files/shares/{id}/qr.png", m.handleShareQRImage)
 	mux.HandleFunc("GET /api/v1/files/receivers", m.handleListReceivers)
 	mux.HandleFunc("POST /api/v1/files/receivers", m.handleCreateReceiver)
 	mux.HandleFunc("GET /api/v1/files/receives", m.handleListReceives)
@@ -121,6 +126,122 @@ func (m *Module) handleCreateShare(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, share)
 }
 
+func (m *Module) handleCreateBrowserShare(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey != "" {
+		if existing, ok := m.store.ShareByIdempotencyKey(idempotencyKey, time.Now().UTC()); ok {
+			existing.URL = publicURL(r, "/share/"+existing.Token)
+			writeJSON(w, http.StatusCreated, existing)
+			return
+		}
+	}
+	requestLimit := m.store.cfg.MaxTotalBytes + 16*1024*1024
+	if requestLimit < m.store.cfg.MaxTotalBytes {
+		requestLimit = m.store.cfg.MaxTotalBytes
+	}
+	body := http.MaxBytesReader(w, r.Body, requestLimit)
+	r.Body = body
+	multipart, err := r.MultipartReader()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "multipart files are required", requestID(r))
+		return
+	}
+	paths := make([]string, 0, m.store.cfg.MaxFilesPerShare)
+	cleanup := make([]string, 0, m.store.cfg.MaxFilesPerShare)
+	defer func() {
+		for _, path := range cleanup {
+			_ = os.Remove(path)
+		}
+	}()
+	var total int64
+	for {
+		part, nextErr := multipart.NextPart()
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid multipart body", requestID(r))
+			return
+		}
+		if part.FormName() != "files" {
+			_ = part.Close()
+			continue
+		}
+		if len(paths) >= m.store.cfg.MaxFilesPerShare {
+			_ = part.Close()
+			writeError(w, http.StatusRequestEntityTooLarge, "share contains too many files", requestID(r))
+			return
+		}
+		name, nameErr := safeName(part.FileName())
+		if nameErr != nil {
+			_ = part.Close()
+			writeError(w, http.StatusBadRequest, nameErr.Error(), requestID(r))
+			return
+		}
+		id, idErr := randomID()
+		if idErr != nil {
+			_ = part.Close()
+			writeError(w, http.StatusInternalServerError, "failed to allocate browser share file", requestID(r))
+			return
+		}
+		tempPath := filepath.Join(m.store.shareDir, "."+id+".upload")
+		file, openErr := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if openErr != nil {
+			_ = part.Close()
+			writeError(w, http.StatusInternalServerError, "failed to create browser share file", requestID(r))
+			return
+		}
+		hash := sha256.New()
+		written, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(part, m.store.cfg.MaxFileBytes+1))
+		closeErr := file.Close()
+		_ = part.Close()
+		if copyErr != nil || closeErr != nil {
+			_ = os.Remove(tempPath)
+			writeError(w, http.StatusBadRequest, "failed to read browser share file", requestID(r))
+			return
+		}
+		if written < 1 || written > m.store.cfg.MaxFileBytes || total > m.store.cfg.MaxTotalBytes-written {
+			_ = os.Remove(tempPath)
+			writeError(w, http.StatusRequestEntityTooLarge, "browser share exceeds configured size limits", requestID(r))
+			return
+		}
+		finalPath := m.store.sharePath(id, name)
+		if err := os.MkdirAll(filepath.Dir(finalPath), 0700); err != nil {
+			_ = os.Remove(tempPath)
+			writeError(w, http.StatusInternalServerError, "failed to create browser share directory", requestID(r))
+			return
+		}
+		if err := os.Rename(tempPath, finalPath); err != nil {
+			_ = os.Remove(tempPath)
+			writeError(w, http.StatusInternalServerError, "failed to finalize browser share file", requestID(r))
+			return
+		}
+		cleanup = append(cleanup, finalPath)
+		paths = append(paths, finalPath)
+		total += written
+	}
+	if len(paths) == 0 {
+		writeError(w, http.StatusBadRequest, "files must be a non-empty multipart selection", requestID(r))
+		return
+	}
+	share, err := m.store.CreateShare(paths, idempotencyKey, time.Now().UTC())
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "exceeds") {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeError(w, status, err.Error(), requestID(r))
+		return
+	}
+	cleanup = nil
+	share.URL = publicURL(r, "/share/"+share.Token)
+	m.logger.Info("browser file share created", "share_id", share.ID, "file_count", len(share.Files), "total_bytes", total)
+	writeJSON(w, http.StatusCreated, share)
+}
+
 func (m *Module) handleGetShare(w http.ResponseWriter, r *http.Request) {
 	if !m.allowManagement(w, r) {
 		return
@@ -143,6 +264,26 @@ func (m *Module) handleShareQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, QRPayload{Version: 1, Type: "localbridge.share", URL: publicURL(r, "/share/"+share.Token), ExpiresAt: share.ExpiresAt})
+}
+
+func (m *Module) handleShareQRImage(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
+	share, ok := m.store.ShareCapability(strings.TrimSpace(r.PathValue("id")), time.Now().UTC())
+	if !ok {
+		writeError(w, http.StatusNotFound, "file share not found or expired", requestID(r))
+		return
+	}
+	data, err := qrcode.Encode(publicURL(r, "/share/"+share.Token), qrcode.Medium, 256)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to generate QR image", requestID(r))
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func (m *Module) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +332,7 @@ func (m *Module) handleListReceives(w http.ResponseWriter, r *http.Request) {
 	if !m.allowManagement(w, r) {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"receives": m.store.ListReceives()})
+	writeJSON(w, http.StatusOK, map[string]any{"receives": m.store.ListReceives(), "uploads": m.store.ListUploads()})
 }
 
 func (m *Module) handleDeleteReceive(w http.ResponseWriter, r *http.Request) {

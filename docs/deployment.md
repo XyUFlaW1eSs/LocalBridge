@@ -71,8 +71,21 @@ File management endpoints under `/api/v1/files/` have an additional boundary: wi
 `security.auth_enabled: false`, they accept only loopback requests and reject LAN clients with
 `403`. With authentication enabled, use the bearer or paired peer token for management. The
 `/share/<token>` and `/receive/<token>` pages are intentionally public capability URLs for phone
-access; keep their random, expiring URLs inside the trusted LAN. The QR endpoint currently returns
-only a local-rendering URL payload; it does not generate an image yet.
+access; keep their random, expiring URLs inside the trusted LAN. The QR endpoints provide both a
+renderer-neutral JSON URL at `/api/v1/files/shares/<id>/qr` and a locally generated PNG at
+`/api/v1/files/shares/<id>/qr.png`. The embedded browser GUI is available at
+`http://127.0.0.1:8899/app/` with Shares, Receive records and Settings views. Browser uploads use
+`POST /api/v1/files/browser-shares`; one multipart batch becomes one share and files are stored under
+the configured `files.share_dir` (default `data/shared`), never under a client-provided path. When
+authentication is enabled, local loopback management requests remain available to the local GUI;
+LAN management clients still require a bearer or paired peer token.
+
+The GUI settings document is stored at `settings.store_path` (default `data/settings.json`). It is
+versioned, non-secret and atomically written with restrictive permissions. The settings currently
+provide the contract for future startup, tray, Explorer context-menu, auto-accept and sound behavior;
+Windows native effects are intentionally deferred to Sprint 4.2B. The QR image is generated locally
+with the MIT-licensed `github.com/skip2/go-qrcode` dependency, so deployment does not require a CDN
+or public QR service.
 
 To keep the logs visible in the current PowerShell window, run:
 
@@ -89,10 +102,10 @@ watch interval.
 
 ## 5. Service installation
 
-Service-manager integration is intentionally not part of Sprint 1. For a first deployment,
-run the executable from a supervised user session because Windows clipboard access belongs to
-the interactive desktop session. A future Windows service/tray design must preserve that
-session requirement and document its security boundary.
+Native Windows service, startup and tray integration is intentionally not part of Sprint 4.2A.
+For a first deployment, run the executable from a supervised user session because Windows
+clipboard access belongs to the interactive desktop session. Sprint 4.2B must preserve that
+session requirement and document the security boundary before applying OS effects.
 
 ## Rollback
 

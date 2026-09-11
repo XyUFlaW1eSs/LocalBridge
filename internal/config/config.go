@@ -19,6 +19,7 @@ type Config struct {
 	Sync      SyncConfig      `yaml:"sync" json:"sync"`
 	Clipboard ClipboardConfig `yaml:"clipboard" json:"clipboard"`
 	Files     FilesConfig     `yaml:"files" json:"files"`
+	Settings  SettingsConfig  `yaml:"settings" json:"settings"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
 }
 
@@ -68,12 +69,17 @@ type ClipboardConfig struct {
 type FilesConfig struct {
 	Enabled          bool          `yaml:"enabled" json:"enabled"`
 	StorePath        string        `yaml:"store_path" json:"store_path"`
+	ShareDir         string        `yaml:"share_dir" json:"share_dir"`
 	ReceiveDir       string        `yaml:"receive_dir" json:"receive_dir"`
 	MaxFileBytes     int64         `yaml:"max_file_bytes" json:"max_file_bytes"`
 	MaxTotalBytes    int64         `yaml:"max_total_bytes" json:"max_total_bytes"`
 	MaxFilesPerShare int           `yaml:"max_files_per_share" json:"max_files_per_share"`
 	ShareTTL         time.Duration `yaml:"share_ttl" json:"share_ttl"`
 	UploadTTL        time.Duration `yaml:"upload_ttl" json:"upload_ttl"`
+}
+
+type SettingsConfig struct {
+	StorePath string `yaml:"store_path" json:"store_path"`
 }
 
 type LoggingConfig struct {
@@ -89,7 +95,8 @@ func Default() Config {
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Sync:      SyncConfig{Enabled: true, StorePath: "data/sync-jobs.json", MaxJobs: 1000, JobRetention: 7 * 24 * time.Hour},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
-		Files:     FilesConfig{Enabled: true, StorePath: "data/files.json", ReceiveDir: "data/received", MaxFileBytes: 2 * 1024 * 1024 * 1024, MaxTotalBytes: 4 * 1024 * 1024 * 1024, MaxFilesPerShare: 100, ShareTTL: 24 * time.Hour, UploadTTL: 24 * time.Hour},
+		Files:     FilesConfig{Enabled: true, StorePath: "data/files.json", ShareDir: "data/shared", ReceiveDir: "data/received", MaxFileBytes: 2 * 1024 * 1024 * 1024, MaxTotalBytes: 4 * 1024 * 1024 * 1024, MaxFilesPerShare: 100, ShareTTL: 24 * time.Hour, UploadTTL: 24 * time.Hour},
+		Settings:  SettingsConfig{StorePath: "data/settings.json"},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
 	}
 }
@@ -267,6 +274,8 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Files.Enabled = v
 	case "files.store_path":
 		cfg.Files.StorePath = value
+	case "files.share_dir":
+		cfg.Files.ShareDir = value
 	case "files.receive_dir":
 		cfg.Files.ReceiveDir = value
 	case "files.max_file_bytes":
@@ -299,6 +308,8 @@ func setValue(cfg *Config, section, key, value string) error {
 			return fmt.Errorf("invalid files.upload_ttl: %w", err)
 		}
 		cfg.Files.UploadTTL = v
+	case "settings.store_path":
+		cfg.Settings.StorePath = value
 	case "logging.level":
 		cfg.Logging.Level = value
 	case "logging.format":
@@ -353,6 +364,9 @@ func (c Config) Validate() error {
 		if c.Files.StorePath == "" {
 			return errors.New("files.store_path must not be empty")
 		}
+		if c.Files.ShareDir == "" {
+			return errors.New("files.share_dir must not be empty")
+		}
 		if c.Files.ReceiveDir == "" {
 			return errors.New("files.receive_dir must not be empty")
 		}
@@ -368,6 +382,9 @@ func (c Config) Validate() error {
 		if c.Files.ShareTTL <= 0 || c.Files.UploadTTL <= 0 {
 			return errors.New("files.share_ttl and files.upload_ttl must be positive")
 		}
+	}
+	if c.Settings.StorePath == "" {
+		return errors.New("settings.store_path must not be empty")
 	}
 	return nil
 }

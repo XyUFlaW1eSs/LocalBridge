@@ -14,10 +14,12 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/modules/clipboard"
 	deviceModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/device"
 	fileModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/files"
+	settingsModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/settings"
 	syncModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/sync"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/web"
 )
 
 type App struct {
@@ -56,6 +58,13 @@ func New(cfg config.Config) (*App, error) {
 	if cfg.Files.Enabled {
 		capabilities = append(capabilities, "files.share", "files.download", "files.receive", "files.resume")
 	}
+	settings, err := settingsModule.New(cfg.Settings, log)
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.Register(settings); err != nil {
+		return nil, err
+	}
 	if cfg.Files.Enabled {
 		fileStore, err := fileModule.New(cfg.Files, log)
 		if err != nil {
@@ -77,7 +86,10 @@ func New(cfg config.Config) (*App, error) {
 			return nil, err
 		}
 	}
-	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, manager.Routes)
+	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, func(mux *http.ServeMux) {
+		manager.Routes(mux)
+		web.Routes(mux)
+	})
 	srv.SetAuthToken(authToken(cfg))
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetPublicPathPrefixes("/share/", "/receive/")

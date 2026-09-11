@@ -236,6 +236,21 @@ Bearer Token 或 peer Token。即使 `security.auth_enabled` 为 `false`，所�
 公开的 `/share/` 和 `/receive/` 只有在 URL Token 作为能力凭证时才绕过管理认证；请将链接限制在可信局域网内。当前服务
 仍然是纯 HTTP，不应暴露到公网。
 
+### 浏览器 GUI 与设置
+
+`POST /api/v1/files/browser-shares` 接收 multipart 表单中的多个 `files` part，是浏览器安全上传入口。文件名来自
+multipart 元数据，字节写入 `files.share_dir` 下，完整多选批次创建一条分享记录；不会接受客户端本地路径，也不会返回本地路径。
+文件数、单文件大小、总配额、安全文件名和过期规则保持不变。`Idempotency-Key` 让浏览器批次重试返回原分享。
+
+`GET /api/v1/files/shares/{id}/qr.png` 返回包含分享 URL 的 `256x256` `image/png` 二维码图片。它使用纯 Go、MIT 许可的
+`github.com/skip2/go-qrcode` 本地生成，不依赖 CDN 或公网二维码服务；JSON `/qr` 接口仍保留为渲染器无关契约。分享过期后两者
+都返回 `404`。
+
+`GET /api/v1/settings` 读取、`PUT /api/v1/settings` 替换、`POST /api/v1/settings/reset` 恢复版本化的非敏感 GUI 设置。
+字段包括 `auto_start`、`minimize_to_tray`、`explorer_context_menu`、`auto_accept`、`notification_sound`、`send_sound` 和
+`receive_sound`。设置以 `0600` 权限原子写入；在 Sprint 4.2B 前不宣称已经产生 Windows 系统效果。`/app/` 来自 Go 内嵌静态资源，
+不依赖外部资源。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；

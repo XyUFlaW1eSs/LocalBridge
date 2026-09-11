@@ -22,7 +22,11 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
 | `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
+<<<<<<< HEAD
 | `v0.4.x` | Phase 4 | In progress | Resumable file sharing, mobile transfer pages and desktop GUI foundation |
+=======
+| `v0.4.x` | Phase 4 | In progress | Sprint 4.2A embedded GUI, browser-safe file shares, real QR PNG and settings delivered; URL/image/notification/native OS work remains |
+>>>>>>> 0dab233 (feat(gui): add embedded browser sharing interface)
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
 | `v0.6.x` | Phase 6 | Planned | Automation, tray/service UX and plugin SDK |
 | `v1.0.0` | Phase 7 | Planned | Stable protocol, secure defaults and upgradeable releases |
@@ -117,9 +121,9 @@ restart policy; duplicate and conflict tests pass.
 
 Goal: move work context, not only clipboard text.
 
-Sprint 4.1 delivered the persisted multi-file share/receive foundation, mobile HTML pages,
-Range downloads, Content-Range uploads, integrity verification and restart recovery. QR image
-rendering and the Windows GUI are intentionally deferred to Sprint 4.2.
+Sprint 4.2A delivered the embedded browser GUI, safe multipart multi-file sharing, receive-record
+views, real local QR PNG generation and versioned settings persistence. Sprint 4.2B remains for
+Windows startup/tray/Explorer effects and broader native UX.
 
 Planned modules:
 

@@ -37,12 +37,16 @@ clipboard:
 files:
   enabled: true
   store_path: "data/files.json"
+  share_dir: "data/shared"
   receive_dir: "data/received"
   max_file_bytes: 2147483648
   max_total_bytes: 4294967296
   max_files_per_share: 100
   share_ttl: 24h
   upload_ttl: 24h
+
+settings:
+  store_path: "data/settings.json"
 
 logging:
   level: "info"

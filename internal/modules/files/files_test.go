@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,7 +21,7 @@ import (
 func testConfig(t *testing.T) config.FilesConfig {
 	t.Helper()
 	return config.FilesConfig{
-		Enabled: true, StorePath: filepath.Join(t.TempDir(), "files.json"), ReceiveDir: filepath.Join(t.TempDir(), "received"),
+		Enabled: true, StorePath: filepath.Join(t.TempDir(), "files.json"), ShareDir: filepath.Join(t.TempDir(), "shared"), ReceiveDir: filepath.Join(t.TempDir(), "received"),
 		MaxFileBytes: 8 * 1024 * 1024, MaxTotalBytes: 16 * 1024 * 1024, MaxFilesPerShare: 10,
 		ShareTTL: time.Hour, UploadTTL: time.Hour,
 	}
@@ -73,6 +74,14 @@ func TestShareMetadataDownloadRangeAndIdempotency(t *testing.T) {
 	if qr.Version != 1 || qr.Type != "localbridge.share" || !strings.Contains(qr.URL, "/share/"+share.Token) {
 		t.Fatalf("unexpected qr payload: %#v", qr)
 	}
+	qrImage, err := http.Get(server.URL + "/api/v1/files/shares/" + share.ID + "/qr.png")
+	if err != nil || qrImage.StatusCode != http.StatusOK || qrImage.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("unexpected QR image response: err=%v status=%d type=%q", err, qrImage.StatusCode, qrImage.Header.Get("Content-Type"))
+	}
+	imageBytes := readBytes(qrImage)
+	if len(imageBytes) < 8 || string(imageBytes[:8]) != "\x89PNG\r\n\x1a\n" {
+		t.Fatalf("QR response is not a PNG: %d bytes", len(imageBytes))
+	}
 
 	request, _ = http.NewRequest(http.MethodPost, server.URL+"/api/v1/files/shares", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -124,6 +133,71 @@ func TestShareMetadataDownloadRangeAndIdempotency(t *testing.T) {
 	}
 	if changed.StatusCode != http.StatusGone {
 		t.Fatalf("changed source should be rejected, got %d body=%s", changed.StatusCode, readBody(changed))
+	}
+}
+
+func TestBrowserMultipartCreatesSingleShareWithoutPathLeak(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module := NewWithStore(store, nil)
+	mux := http.NewServeMux()
+	module.Routes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for name, content := range map[string]string{"one.txt": "one", "two.txt": "two"} {
+		part, err := writer.CreateFormFile("files", name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/files/browser-shares", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Idempotency-Key", "browser-share-1")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := readBytes(response)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("browser share status=%d body=%s", response.StatusCode, data)
+	}
+	var share Share
+	if err := json.Unmarshal(data, &share); err != nil {
+		t.Fatal(err)
+	}
+	if len(share.Files) != 2 || strings.Contains(string(data), "source_path") || strings.Contains(string(data), cfg.ShareDir) {
+		t.Fatalf("browser share leaked path or split batch: files=%d body=%s", len(share.Files), data)
+	}
+	for _, file := range share.Files {
+		entries, err := os.ReadDir(store.shareDir)
+		matches := 0
+		for _, entry := range entries {
+			if entry.IsDir() {
+				children, _ := os.ReadDir(filepath.Join(store.shareDir, entry.Name()))
+				for _, child := range children {
+					if child.Name() == file.Name {
+						matches++
+					}
+				}
+			}
+		}
+		if err != nil || matches != 1 {
+			t.Fatalf("controlled share file missing for %s in %s: matches=%d err=%v", file.Name, store.shareDir, matches, err)
+		}
 	}
 }
 

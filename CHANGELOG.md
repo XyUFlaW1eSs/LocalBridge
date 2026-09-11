@@ -13,6 +13,9 @@ All notable changes to LocalBridge are documented here.
 - Phase 2 Sprint 2.4: paired peer tokens can authenticate protected APIs when auth is enabled.
 - Phase 2 Sprint 2.5: added peer health probes and best-effort outbound clipboard delivery for paired LocalBridge peers.
 - Phase 3 Sprint 3.1: added generic Envelopes, durable sync Jobs, retention bounds and read-only job inspection.
+- Phase 4 Sprint 4.2A: added the embedded `/app/` GUI, browser-safe multi-file shares, persisted
+  receive records UI, real local QR PNG generation and versioned settings persistence. Native Windows
+  startup/tray/Explorer effects remain deferred to Sprint 4.2B.
 
 ## [0.1.0] - 2026-08-02
 

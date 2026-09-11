@@ -77,6 +77,27 @@ func TestAuthentication(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedServerAllowsLoopbackGUI(t *testing.T) {
+	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), func(mux *http.ServeMux) {
+		mux.HandleFunc("GET /app/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	})
+	s.SetAuthToken("0123456789abcdef")
+	local := httptest.NewRequest(http.MethodGet, "/app/", nil)
+	local.RemoteAddr = "127.0.0.1:1234"
+	localRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(localRecorder, local)
+	if localRecorder.Code != http.StatusOK {
+		t.Fatalf("loopback GUI should bypass management auth, got %d: %s", localRecorder.Code, localRecorder.Body.String())
+	}
+	remote := httptest.NewRequest(http.MethodGet, "/app/", nil)
+	remote.RemoteAddr = "192.168.1.9:1234"
+	remoteRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(remoteRecorder, remote)
+	if remoteRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("remote GUI should remain protected, got %d: %s", remoteRecorder.Code, remoteRecorder.Body.String())
+	}
+}
+
 func TestRequestIDValidation(t *testing.T) {
 	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	recorder := httptest.NewRecorder()

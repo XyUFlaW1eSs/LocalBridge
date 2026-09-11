@@ -29,6 +29,12 @@ the Phase 1 design under iOS background execution constraints. Paired LocalBridg
 peers can now receive local clipboard events through a best-effort outbound path; durable
 queue/retry semantics are planned for Phase 3.
 
+The local Web GUI is available at `http://127.0.0.1:8899/app/`. It provides file sharing,
+receive history and persisted settings. The browser uploads multipart files into the server's
+controlled `files.share_dir`; it never sends or displays a real local path. The share page has
+drag/drop and multi-select support, expandable file rows, URL copy and an offline-generated PNG
+QR code. Native Windows startup, tray and Explorer integration are deferred to Sprint 4.2B.
+
 Runtime logs are written to the current console. Use `scripts/run.ps1` to run a release package
 in the foreground and see Push, Pull, deduplication and clipboard-write diagnostics. Clipboard
 content itself is never logged.
@@ -79,6 +85,9 @@ on CI and on other platforms.
 | `internal/syncstore` | Versioned Envelope and durable sync job state |
 | `internal/server` | Standard-library HTTP server and health API |
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
+| `internal/modules/files` | Share/receive storage, Range transfer, browser upload and QR PNG |
+| `internal/modules/settings` | Versioned non-secret GUI settings store and API |
+| `internal/web` | Embedded vanilla HTML/CSS/JS GUI, no CDN |
 | `docs` | Architecture, protocol, deployment and development standards |
 | `shortcut` | iPhone Shortcut setup and payload examples |
 
@@ -108,6 +117,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
+- [Sprint 4.2A delivery](docs/sprints/sprint-4.2a.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

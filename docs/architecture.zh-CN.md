@@ -12,8 +12,8 @@ LocalBridge 被设计为长期维护的本地优先平台，而不是一次性�
 ```text
                          可信局域网
 ┌──────────────────┐       HTTP/JSON       ┌─────────────────────────┐
-│ iPhone 快捷指令  │ ────────────────────> │ Windows LocalBridge     │
-│ Push / Pull      │ <──────────────────── │ net/http + EventBus     │
+│ iPhone / 浏览器   │ ───────────────────> │ Windows LocalBridge     │
+│ 分享 / 接收       │ <─────────────────── │ GUI + HTTP + EventBus   │
 └──────────────────┘                      │ 剪贴板 + 文件模块       │
                                           └───────────┬─────────────┘
                                                       │ Win32 适配器
@@ -37,6 +37,9 @@ iPhone 不运行持久化监听器。Push 和 Pull 是用户主动触发的快�
 - `internal/modules/clipboard`：剪贴板领域行为与平台接口。Win32 代码通过构建标签隔离。
 - `internal/modules/files`：持久化分享/接收元数据、能力 URL、安全源文件检查、HTTP Range 下载和
   Content-Range 上传。它负责生成接收路径，不依赖剪贴板模块或 GUI 层。
+- `internal/modules/settings`：GUI 偏好的版本化原子 JSON 设置，只保存非敏感意图；Windows 开机自启、托盘和
+  Explorer 效果属于后续原生集成。
+- `internal/web`：位于 `/app/` 的内嵌 vanilla HTML/CSS/JS，不依赖 CDN 或网络资源。
 
 ## 生命周期
 
@@ -62,6 +65,13 @@ iPhone 不运行持久化监听器。Push 和 Pull 是用户主动触发的快�
 
 Phase 1 剪贴板模块没有出站 HTTP 客户端或对端设备注册表。因此 Windows 剪贴板变化不会主动发送到 iPhone；
 必须由 iPhone Pull 快捷指令请求 `GET /api/v1/clipboard/latest`。
+
+## Web GUI 流程
+
+本地 GUI 通过 `/app/` 的内嵌资源提供。浏览器选择或拖拽文件后，以 multipart 调用
+`POST /api/v1/files/browser-shares`。服务端将每个 part 写入配置的受控分享目录，然后为完整批次创建一条分享记录；
+浏览器不会得到本地路径。分享行从管理 API 获取 JSON 二维码契约和 PNG；接受记录页面合并活跃上传偏移与已完成接收记录。
+设置通过 `/api/v1/settings` 读写；本机回环请求可供 GUI 使用，远程管理仍需要认证。
 
 ## 扩展规则
 

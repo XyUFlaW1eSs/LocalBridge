@@ -62,8 +62,16 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 
 `/api/v1/files/` 下的文件管理接口还有额外边界：当 `security.auth_enabled: false` 时，只接受回环请求，来自局域网
 的管理请求返回 `403`；启用认证后，管理操作必须使用 Bearer Token 或已配对的 peer Token。`/share/<token>` 和
-`/receive/<token>` 页面是供手机访问的公开能力 URL，请只在可信局域网内使用随机且会过期的链接。当前二维码接口只返回
-供本地渲染的 URL 数据，不生成二维码图片。
+`/receive/<token>` 页面是供手机访问的公开能力 URL，请只在可信局域网内使用随机且会过期的链接。二维码接口同时提供
+渲染器无关的 JSON URL（`/api/v1/files/shares/<id>/qr`）和本地生成的 PNG 图片
+（`/api/v1/files/shares/<id>/qr.png`）。内嵌浏览器 GUI 位于 `http://127.0.0.1:8899/app/`，包含分享、接收记录和设置三个区域。
+浏览器上传使用 `POST /api/v1/files/browser-shares`；一个 multipart 批次创建一条分享，文件写入配置的 `files.share_dir`
+（默认 `data/shared`），不会使用客户端提供的本地路径。启用认证后，本机回环管理请求仍供本地 GUI 使用；局域网管理客户端仍
+必须提供 Bearer Token 或已配对的 peer Token。
+
+GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是版本化、非敏感、以严格权限原子写入的文档。当前设置为未来的
+开机启动、托盘、Explorer 右键菜单、自动接收和声音行为提供契约；Windows 原生效果明确推迟到 Sprint 4.2B。二维码图片由 MIT
+许可的 `github.com/skip2/go-qrcode` 在本地生成，部署不需要 CDN 或公网二维码服务。
 
 需要持续查看日志时，请在 PowerShell 中运行：
 
@@ -79,8 +87,8 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 
 ## 5. 服务安装
 
-服务管理器集成明确不属于 Sprint 1。首次部署时应在受监管的用户会话中运行程序，因为 Windows 剪贴板访问属于
-交互式桌面会话。未来的 Windows 服务/托盘设计必须保留这一会话要求，并记录安全边界。
+Windows 原生服务、开机启动和托盘集成明确不属于 Sprint 4.2A。首次部署时应在受监管的用户会话中运行程序，因为 Windows
+剪贴板访问属于交互式桌面会话。Sprint 4.2B 在产生系统效果前必须保留这一会话要求，并记录安全边界。
 
 ## 回滚
 

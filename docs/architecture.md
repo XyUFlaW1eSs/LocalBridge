@@ -13,8 +13,8 @@ registration. Features live behind module interfaces and communicate through eve
 ```text
                          Trusted LAN
 ┌──────────────────┐       HTTP/JSON       ┌─────────────────────────┐
-│ iPhone Shortcuts │ ────────────────────> │ LocalBridge Windows     │
-│ Push / Pull      │ <──────────────────── │ net/http + EventBus     │
+│ iPhone / Browser  │ ───────────────────> │ LocalBridge Windows     │
+│ share / receive   │ <─────────────────── │ GUI + HTTP + EventBus   │
 └──────────────────┘                      │ clipboard + files       │
                                           └───────────┬─────────────┘
                                                       │ Win32 adapter
@@ -44,6 +44,9 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/modules/files`: persisted share/receive metadata, capability URLs, safe source-file
   inspection, HTTP Range downloads and Content-Range uploads. It owns generated receive paths and
   does not depend on the clipboard module or GUI layer.
+- `internal/modules/settings`: versioned atomic JSON settings for GUI preferences. It stores only
+  non-secret intent; Windows startup/tray/Explorer effects remain a later native integration.
+- `internal/web`: embedded vanilla HTML/CSS/JS at `/app/`, with no CDN or network asset dependency.
 
 ## Lifecycle
 
@@ -71,6 +74,16 @@ event. Phase 1 does not persist history; the latest item is held in memory.
 The Phase 1 clipboard module has no outbound HTTP client or peer registry. A Windows clipboard
 change is therefore not actively sent to an iPhone; the iPhone Pull Shortcut requests
 `GET /api/v1/clipboard/latest`.
+
+## Web GUI flow
+
+The local GUI is served from embedded resources at `/app/`. Browser file selection and drag/drop
+use `POST /api/v1/files/browser-shares` as multipart form data. The server writes each part into
+the configured controlled share directory, then creates one share record for the complete batch;
+the browser never receives a local path. Share rows fetch the JSON QR contract and PNG from the
+management API. Receive history combines active upload offsets with completed receive records.
+Settings are read and written through `/api/v1/settings`; local loopback requests are allowed for
+the GUI while remote management still requires authentication.
 
 ## Extension rule
 

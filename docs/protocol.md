@@ -264,6 +264,26 @@ from clients. Tokens expire and are never logged. Public `/share/` and `/receive
 management authentication only because the URL token is the capability; keep these URLs on a trusted
 LAN. The current service is HTTP-only and is not intended for public-internet exposure.
 
+### Browser GUI and settings
+
+`POST /api/v1/files/browser-shares` accepts a multipart form with repeated `files` parts. It is
+the browser-safe equivalent of the native path API: filenames come from multipart metadata, bytes
+are written below `files.share_dir`, and one share is created for the complete selection. It never
+accepts a client local path or returns one. The same file count, file size, total quota, safe-name
+and expiration rules apply. `Idempotency-Key` makes a retried browser batch return the original
+share.
+
+`GET /api/v1/files/shares/{id}/qr.png` returns a `256x256` `image/png` QR image containing the
+share URL. It is generated locally with the pure-Go MIT-licensed `github.com/skip2/go-qrcode`
+dependency; no CDN or public QR service is used. The JSON `/qr` endpoint remains the renderer-
+neutral contract. Both endpoints return `404` after share expiration.
+
+`GET /api/v1/settings` reads, `PUT /api/v1/settings` replaces, and `POST /api/v1/settings/reset`
+restores the versioned non-secret GUI settings document. Fields are `auto_start`,
+`minimize_to_tray`, `explorer_context_menu`, `auto_accept`, `notification_sound`, `send_sound`
+and `receive_sound`. The store is atomically written with mode `0600`; OS effects are not claimed
+until Sprint 4.2B. `/app/` is served from Go-embedded static resources and has no external assets.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON

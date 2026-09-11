@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -151,7 +152,7 @@ func newRequestID() string {
 
 func authentication(s *Server, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.authToken == "" || r.URL.Path == "/api/v1/system/health" || s.isPublicPath(r.URL.Path) {
+		if s.authToken == "" || r.URL.Path == "/api/v1/system/health" || s.isPublicPath(r.URL.Path) || (s.isLocalManagementPath(r.URL.Path) && requestIsLoopback(r)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -171,6 +172,20 @@ func authentication(s *Server, next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), authenticatedKey{}, true)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *Server) isLocalManagementPath(path string) bool {
+	return path == "/" || path == "/app" || strings.HasPrefix(path, "/app/") || strings.HasPrefix(path, "/api/v1/files/") || path == "/api/v1/settings" || strings.HasPrefix(path, "/api/v1/settings/")
+}
+
+func requestIsLoopback(r *http.Request) bool {
+	host := strings.TrimSpace(r.RemoteAddr)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (s *Server) isPublicPath(path string) bool {

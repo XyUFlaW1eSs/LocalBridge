@@ -29,6 +29,7 @@ const (
 type Store struct {
 	cfg        config.FilesConfig
 	path       string
+	shareDir   string
 	receiveDir string
 
 	mu        sync.RWMutex
@@ -39,7 +40,7 @@ type Store struct {
 }
 
 func NewStore(cfg config.FilesConfig) (*Store, error) {
-	if cfg.StorePath == "" || cfg.ReceiveDir == "" || cfg.MaxFileBytes < 1 || cfg.MaxTotalBytes < cfg.MaxFileBytes || cfg.MaxFilesPerShare < 1 || cfg.ShareTTL <= 0 || cfg.UploadTTL <= 0 {
+	if cfg.StorePath == "" || cfg.ShareDir == "" || cfg.ReceiveDir == "" || cfg.MaxFileBytes < 1 || cfg.MaxTotalBytes < cfg.MaxFileBytes || cfg.MaxFilesPerShare < 1 || cfg.ShareTTL <= 0 || cfg.UploadTTL <= 0 {
 		return nil, errors.New("invalid files configuration")
 	}
 	storePath, err := filepath.Abs(filepath.Clean(cfg.StorePath))
@@ -53,7 +54,14 @@ func NewStore(cfg config.FilesConfig) (*Store, error) {
 	if err := os.MkdirAll(receiveDir, 0700); err != nil {
 		return nil, fmt.Errorf("create files receive directory: %w", err)
 	}
-	s := &Store{cfg: cfg, path: storePath, receiveDir: receiveDir, shares: make(map[string]storedShare), receivers: make(map[string]Receiver), uploads: make(map[string]Upload), receives: make(map[string]ReceiveRecord)}
+	shareDir, err := filepath.Abs(filepath.Clean(cfg.ShareDir))
+	if err != nil {
+		return nil, fmt.Errorf("resolve files share directory: %w", err)
+	}
+	if err := os.MkdirAll(shareDir, 0700); err != nil {
+		return nil, fmt.Errorf("create files share directory: %w", err)
+	}
+	s := &Store{cfg: cfg, path: storePath, shareDir: shareDir, receiveDir: receiveDir, shares: make(map[string]storedShare), receivers: make(map[string]Receiver), uploads: make(map[string]Upload), receives: make(map[string]ReceiveRecord)}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -158,6 +166,18 @@ func (s *Store) ShareCapability(id string, now time.Time) (Share, bool) {
 		return Share{}, false
 	}
 	return publicShare(record, true), true
+}
+
+func (s *Store) ShareByIdempotencyKey(key string, now time.Time) (Share, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.expireLocked(now)
+	for _, record := range s.shares {
+		if record.IdempotencyKey == key {
+			return publicShare(record, true), true
+		}
+	}
+	return Share{}, false
 }
 
 func (s *Store) DeleteShare(id string) error {
@@ -272,6 +292,17 @@ func (s *Store) ListReceives() []ReceiveRecord {
 		}
 		return result[i].CompletedAt.After(*result[j].CompletedAt)
 	})
+	return result
+}
+
+func (s *Store) ListUploads() []Upload {
+	s.mu.RLock()
+	result := make([]Upload, 0, len(s.uploads))
+	for _, upload := range s.uploads {
+		result = append(result, upload)
+	}
+	s.mu.RUnlock()
+	sort.Slice(result, func(i, j int) bool { return result[i].UpdatedAt.After(result[j].UpdatedAt) })
 	return result
 }
 
@@ -723,6 +754,10 @@ func (s *Store) saveLocked() error {
 }
 
 func (s *Store) partPath(id string) string { return filepath.Join(s.receiveDir, "."+id+".part") }
+
+func (s *Store) sharePath(id, name string) string {
+	return filepath.Join(s.shareDir, id, filepath.Base(name))
+}
 
 func (s *Store) finalPath(id, name string) string {
 	base := filepath.Base(name)

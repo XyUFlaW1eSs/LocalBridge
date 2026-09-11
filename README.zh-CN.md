@@ -25,6 +25,10 @@ Windows 本地剪贴板变化目前不会主动向 iPhone 发 HTTP 请求。它�
 快捷指令主动 GET；这是 iOS 后台限制下的 Phase 1 设计。已配对的其他 LocalBridge 桌面主机现在可以通过尽力而为的
 出站路径接收本地剪贴板事件；持久化队列和重试语义计划在 Phase 3 实现。
 
+本地 Web GUI 位于 `http://127.0.0.1:8899/app/`，包含文件分享、接受记录和持久化设置三个区域。浏览器通过 multipart
+上传到服务端受控的 `files.share_dir`，不会发送或显示真实本地路径。分享页支持拖拽、多选、可展开文件行、复制 URL 和
+离线生成 PNG 二维码。Windows 原生开机自启、托盘和 Explorer 集成延期到 Sprint 4.2B。
+
 运行日志会输出到当前控制台。发布包可使用 `scripts/run.ps1` 前台运行，这样能看到每次 Push、Pull、去重和
 剪贴板写入的诊断信息；日志不会记录剪贴板正文。
 
@@ -72,6 +76,9 @@ go build ./cmd/localbridge
 | `internal/syncstore` | 带版本的 Envelope 与持久化同步任务状态 |
 | `internal/server` | 标准库 HTTP 服务与健康接口 |
 | `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
+| `internal/modules/files` | 分享/接收存储、Range 传输、浏览器上传和二维码 PNG |
+| `internal/modules/settings` | 版本化非敏感 GUI 设置存储和 API |
+| `internal/web` | 内嵌 vanilla HTML/CSS/JS GUI，不依赖 CDN |
 | `docs` | 架构、协议、部署与开发规范 |
 | `shortcut` | iPhone 快捷指令配置与请求示例 |
 
@@ -99,6 +106,7 @@ go build ./cmd/localbridge
 - [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [Sprint 4.1 文件传输](docs/sprints/sprint-4.1-file-transfer.zh-CN.md)
 - [Sprint 4.2 桌面 GUI](docs/sprints/sprint-4.2-desktop-gui.zh-CN.md)
+- [Sprint 4.2A 交付](docs/sprints/sprint-4.2a.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
 - [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)

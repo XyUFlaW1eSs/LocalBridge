@@ -20,7 +20,11 @@ LocalBridge 不应停留在“Windows 与 iPhone 剪贴板同步器”。它的�
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | 已交付 | Windows 文本剪贴板桥接和 iPhone Push/Pull 快捷指令 |
 | `v0.2.x` | Phase 2 | 进行中 | Sprint 2.1 已交付请求 ID/能力/认证；信任、发现和生产基础设施仍待完成 |
 | `v0.3.x` | Phase 3 | 进行中 | Sprint 3.1 已交付 Envelope/Job 存储；重试、历史和富剪贴板仍待完成 |
+<<<<<<< HEAD
 | `v0.4.x` | Phase 4 | 进行中 | 可恢复文件分享、移动端传输页面和桌面 GUI 基础 |
+=======
+| `v0.4.x` | Phase 4 | 进行中 | Sprint 4.2A 已交付内嵌 GUI、浏览器安全文件分享、真实二维码 PNG 和设置持久化；URL/图片/通知/原生系统能力仍待完成 |
+>>>>>>> 0dab233 (feat(gui): add embedded browser sharing interface)
 | `v0.5.x` | Phase 5 | 计划中 | 其他客户端与设备适配器 |
 | `v0.6.x` | Phase 6 | 计划中 | 自动化、托盘/服务体验和插件 SDK |
 | `v1.0.0` | Phase 7 | 计划中 | 稳定协议、安全默认值和可升级发布 |
@@ -106,8 +110,8 @@ Sprint 3.1 已提供通用 Envelope、有边界的持久化 Job 存储和只读�
 
 目标：传递工作上下文，而不只是剪贴板文本。
 
-Sprint 4.1 已交付持久化多文件分享/接收基础、移动端 HTML 页面、Range 下载、Content-Range 上传、完整性校验和重启恢复。
-二维码图片渲染和 Windows GUI 有意留到 Sprint 4.2。
+Sprint 4.2A 已交付内嵌浏览器 GUI、安全 multipart 多文件分享、接收记录界面、本地真实二维码 PNG 和版本化设置持久化。Sprint 4.2B
+仍负责 Windows 开机启动/托盘/Explorer 效果及更完整的原生体验。
 
 计划模块：
 
