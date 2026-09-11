@@ -105,6 +105,7 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
+- [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)
