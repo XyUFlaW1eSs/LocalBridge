@@ -32,7 +32,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
   peer tokens authenticate protected APIs when auth is enabled. Phase 2.5 added peer health
   probes and best-effort local clipboard forwarding. Phase 3.1 added the generic Envelope,
   durable Job store and read-only job inspection; retries, offline replay, rich content, TLS
-  and a public-client ecosystem are not implemented yet.
+  and a public-client ecosystem are not implemented yet. Phase 4 file-sharing work is now
+  being planned as a web-first, resumable transfer workflow with a Windows desktop shell.
 - Windows-to-iPhone is currently a Pull flow: Windows updates in-memory latest; the iPhone
   must GET it. Paired LocalBridge desktop peers have best-effort outbound clipboard delivery,
   but iPhone automatic push and durable queue/retry guarantees do not exist.
@@ -52,6 +53,10 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - `DELETE /api/v1/devices/{id}`: revokes a peer.
 - `GET /api/v1/devices/discovered`: lists ephemeral UDP discovery hints; discovered devices are
   not trusted and are not added to the paired registry.
+- File-sharing routes are not yet part of the current baseline. The required future contract is
+  documented in `docs/file-sharing-product-plan.md`: one multi-file share record, opaque public
+  token, QR/HTTP mobile page, HTTP `Range` downloads, `Content-Range` uploads, expiry/revocation,
+  checksum verification and safe path boundaries.
 - Phase 1 default maximum is 1048576 UTF-8 bytes. Hashes are SHA-256; duplicate hashes are
   ignored. Remote writes have a short suppression window to prevent watcher echo.
 - The complete contract is in `docs/clipboard.md` and `docs/protocol.md`.
@@ -84,7 +89,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
    is implemented only as an untrusted hint.
 2. Phase 3 / v0.3.x: retry/offline policy, receipts, conflict/idempotency rules, history, rich
    clipboard, images, HTML/RTF and screenshots. Envelope/job state is partially delivered.
-3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, URL push, image delivery,
+3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, QR/HTTP mobile download/upload
+   pages, a Windows File Share / Receive History / Settings GUI, URL push, image delivery,
    notifications, screenshots and composite context jobs.
 4. Phase 5 / v0.5.x: native iOS/iPadOS, Android, macOS, Linux, Windows tray/service, CLI,
    diagnostics web page and multi-device targeting.
@@ -93,7 +99,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
 6. Phase 7 / v1.0.0: stable protocol policy, security review, signed artifacts, upgrade/
    rollback, recovery, performance budgets and conformance tests.
 
-See `docs/product-plan.md`, `docs/roadmap.md` and their Chinese versions for the full plan.
+See `docs/product-plan.md`, `docs/roadmap.md`, `docs/file-sharing-product-plan.md`,
+`docs/engineering-workflow.md` and their Chinese versions for the full plan.
 
 ## Non-negotiable engineering rules
 
@@ -112,6 +119,8 @@ See `docs/product-plan.md`, `docs/roadmap.md` and their Chinese versions for the
 - Treat OS limitations as explicit capability differences and implement safe fallback behavior.
 - Keep the standard library preference unless a dependency has a clear maintenance and security
   justification.
+- For the current delegated workflow, the main controller owns planning and acceptance while the
+  child task named `程序开发` owns assigned implementation slices in an isolated worktree.
 
 ## Development workflow
 
