@@ -10,6 +10,8 @@ collaboration platform.
 - Phase 0: repository bootstrap and core runtime.
 - Phase 1 / Sprint 1: text clipboard exchange between Windows and iPhone Shortcuts.
 - `v0.1.0`: runnable Windows package with foreground diagnostics and bilingual documentation.
+- Phase 4.1: persisted multi-file shares, mobile download/upload pages, HTTP Range,
+  Content-Range resume and recovery-safe file storage foundation.
 
 ## Planned releases
 

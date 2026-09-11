@@ -9,6 +9,7 @@ LocalBridge 正从 Windows/iPhone 剪贴板 MVP 演进为本地优先、模块�
 - Phase 0：仓库初始化与核心运行时。
 - Phase 1 / Sprint 1：Windows 与 iPhone 快捷指令之间的文本剪贴板交换。
 - `v0.1.0`：可运行的 Windows 发布包、前台诊断日志和完整中英文文档。
+- Phase 4.1：持久化多文件分享、移动端下载/上传页面、HTTP Range、Content-Range 续传和可恢复文件存储基础。
 
 ## 计划版本
 

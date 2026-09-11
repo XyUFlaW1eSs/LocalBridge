@@ -2,7 +2,8 @@
 
 [简体中文](sprint-4.1-file-transfer.zh-CN.md)
 
-Status: assigned to the `程序开发` child task; not accepted yet.
+Status: delivered and accepted after main-controller review. Implementation commits:
+`2f19cc5`, `adcefb9`, `a6fe32e`.
 
 ## Goal
 
@@ -40,3 +41,9 @@ page boundary. It does not claim to deliver the Windows native shell, tray or Ex
 4. Expired or revoked tokens cannot read, upload or mutate transfer state.
 5. Traversal, symlink escape, oversized body, invalid Range and checksum mismatch are rejected.
 6. `go test ./...`, `go vet ./...`, `go build ./cmd/localbridge` and `git diff --check` pass.
+
+## Review result
+
+The backend and mobile transfer boundary are accepted. The QR endpoint currently returns a
+renderer-neutral payload rather than an image, so offline QR rendering and all native Windows
+GUI behavior remain Sprint 4.2 work.

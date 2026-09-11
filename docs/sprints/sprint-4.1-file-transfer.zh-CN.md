@@ -2,7 +2,7 @@
 
 [English](sprint-4.1-file-transfer.md)
 
-状态：已下发给 `程序开发` 子任务，尚未验收。
+状态：已交付并通过主控审查。实现 commit：`2f19cc5`、`adcefb9`、`a6fe32e`。
 
 ## 目标
 
@@ -36,3 +36,8 @@
 4. 过期或撤销 token 无法读取、上传或修改传输状态。
 5. 路径穿越、符号链接逃逸、超大请求体、非法 Range 和校验和不匹配必须被拒绝。
 6. `go test ./...`、`go vet ./...`、`go build ./cmd/localbridge` 和 `git diff --check` 全部通过。
+
+## 审查结果
+
+后端和移动端传输边界已验收。当前二维码接口只返回与渲染器无关的数据契约，不返回图片；离线二维码渲染和所有 Windows
+原生 GUI 行为仍属于 Sprint 4.2。

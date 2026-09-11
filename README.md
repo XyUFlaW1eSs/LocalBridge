@@ -6,8 +6,9 @@ LocalBridge is a lightweight, local-first LAN collaboration platform. Its first 
 module synchronizes text clipboard content between a Windows PC and an iPhone through two
 iPhone Shortcuts. No cloud account or relay service is required.
 
-> Status: Phase 0 and Phase 1 / Sprint 1 delivered. The Windows clipboard integration is
-> active when built on Windows; the rest of the project remains cross-platform and testable.
+> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1 and Phase 4.1 file-transfer
+> foundation are delivered. The Windows GUI, QR image rendering, tray/settings integration and
+> URL/image/notification modules are still in progress.
 
 ## What it does
 
@@ -20,7 +21,7 @@ iPhone Shortcut <--HTTP GET--- LocalBridge on Windows <--Win32-- Windows Clipboa
 - `GET /api/v1/clipboard/latest` returns the latest item for the Pull Shortcut.
 - A Windows watcher polls the Win32 clipboard sequence number and publishes local changes.
 - SHA-256 content hashes prevent duplicate updates and clipboard feedback loops.
-- EventBus and module boundaries keep future file, image and notification features separate.
+- EventBus and module boundaries keep file, image and notification features separate.
 
 Windows clipboard changes are not currently pushed to the iPhone automatically. The watcher
 updates the in-memory `latest` item; the iPhone must run the Pull Shortcut to GET it. This is
@@ -83,10 +84,11 @@ on CI and on other platforms.
 
 ## Security boundary
 
-Phase 1 started without authentication. Phase 2.1 adds optional Bearer-token authentication,
-but pairing, token provisioning/rotation and TLS are still pending. The service remains
-appropriate only for a trusted home/office LAN, with the Windows firewall restricted to the
-private network profile. Do not expose port 8899 to the public internet.
+The file-transfer foundation uses expiring capability URLs for public mobile pages. File
+management APIs are restricted to loopback unless a request has passed the configured global or
+paired-peer authentication boundary. The service remains appropriate only for a trusted
+home/office LAN, with the Windows firewall restricted to the private network profile. Do not
+expose port 8899 or share URLs to the public internet.
 
 ## Documentation
 

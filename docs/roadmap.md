@@ -113,9 +113,13 @@ Exit criteria: a paired phone or desktop client receives a Windows clipboard cha
 authenticated outbound path; rich content degrades safely; history survives a configured
 restart policy; duplicate and conflict tests pass.
 
-### Phase 4 — LAN collaboration modules (in progress)
+### Phase 4 — LAN collaboration modules (in progress; Sprint 4.1 delivered)
 
 Goal: move work context, not only clipboard text.
+
+Sprint 4.1 delivered the persisted multi-file share/receive foundation, mobile HTML pages,
+Range downloads, Content-Range uploads, integrity verification and restart recovery. QR image
+rendering and the Windows GUI are intentionally deferred to Sprint 4.2.
 
 Planned modules:
 
