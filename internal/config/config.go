@@ -18,6 +18,7 @@ type Config struct {
 	Discovery DiscoveryConfig `yaml:"discovery" json:"discovery"`
 	Sync      SyncConfig      `yaml:"sync" json:"sync"`
 	Clipboard ClipboardConfig `yaml:"clipboard" json:"clipboard"`
+	Files     FilesConfig     `yaml:"files" json:"files"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
 }
 
@@ -61,6 +62,20 @@ type ClipboardConfig struct {
 	WatchInterval time.Duration `yaml:"watch_interval" json:"watch_interval"`
 }
 
+// FilesConfig controls the local file sharing and receiving boundary. Source
+// files are never copied into StorePath; received files are written below
+// ReceiveDir and are addressed by generated IDs, not client-supplied paths.
+type FilesConfig struct {
+	Enabled          bool          `yaml:"enabled" json:"enabled"`
+	StorePath        string        `yaml:"store_path" json:"store_path"`
+	ReceiveDir       string        `yaml:"receive_dir" json:"receive_dir"`
+	MaxFileBytes     int64         `yaml:"max_file_bytes" json:"max_file_bytes"`
+	MaxTotalBytes    int64         `yaml:"max_total_bytes" json:"max_total_bytes"`
+	MaxFilesPerShare int           `yaml:"max_files_per_share" json:"max_files_per_share"`
+	ShareTTL         time.Duration `yaml:"share_ttl" json:"share_ttl"`
+	UploadTTL        time.Duration `yaml:"upload_ttl" json:"upload_ttl"`
+}
+
 type LoggingConfig struct {
 	Level  string `yaml:"level" json:"level"`
 	Format string `yaml:"format" json:"format"`
@@ -74,6 +89,7 @@ func Default() Config {
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Sync:      SyncConfig{Enabled: true, StorePath: "data/sync-jobs.json", MaxJobs: 1000, JobRetention: 7 * 24 * time.Hour},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
+		Files:     FilesConfig{Enabled: true, StorePath: "data/files.json", ReceiveDir: "data/received", MaxFileBytes: 2 * 1024 * 1024 * 1024, MaxTotalBytes: 4 * 1024 * 1024 * 1024, MaxFilesPerShare: 100, ShareTTL: 24 * time.Hour, UploadTTL: 24 * time.Hour},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
 	}
 }
@@ -243,6 +259,46 @@ func setValue(cfg *Config, section, key, value string) error {
 			return fmt.Errorf("invalid clipboard.watch_interval: %w", err)
 		}
 		cfg.Clipboard.WatchInterval = v
+	case "files.enabled":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid files.enabled: %w", err)
+		}
+		cfg.Files.Enabled = v
+	case "files.store_path":
+		cfg.Files.StorePath = value
+	case "files.receive_dir":
+		cfg.Files.ReceiveDir = value
+	case "files.max_file_bytes":
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid files.max_file_bytes: %w", err)
+		}
+		cfg.Files.MaxFileBytes = v
+	case "files.max_total_bytes":
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid files.max_total_bytes: %w", err)
+		}
+		cfg.Files.MaxTotalBytes = v
+	case "files.max_files_per_share":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid files.max_files_per_share: %w", err)
+		}
+		cfg.Files.MaxFilesPerShare = v
+	case "files.share_ttl":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid files.share_ttl: %w", err)
+		}
+		cfg.Files.ShareTTL = v
+	case "files.upload_ttl":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid files.upload_ttl: %w", err)
+		}
+		cfg.Files.UploadTTL = v
 	case "logging.level":
 		cfg.Logging.Level = value
 	case "logging.format":
@@ -292,6 +348,26 @@ func (c Config) Validate() error {
 	}
 	if c.Clipboard.WatchInterval <= 0 {
 		return errors.New("clipboard.watch_interval must be positive")
+	}
+	if c.Files.Enabled {
+		if c.Files.StorePath == "" {
+			return errors.New("files.store_path must not be empty")
+		}
+		if c.Files.ReceiveDir == "" {
+			return errors.New("files.receive_dir must not be empty")
+		}
+		if c.Files.MaxFileBytes < 1 {
+			return errors.New("files.max_file_bytes must be positive")
+		}
+		if c.Files.MaxTotalBytes < c.Files.MaxFileBytes {
+			return errors.New("files.max_total_bytes must be at least max_file_bytes")
+		}
+		if c.Files.MaxFilesPerShare < 1 {
+			return errors.New("files.max_files_per_share must be positive")
+		}
+		if c.Files.ShareTTL <= 0 || c.Files.UploadTTL <= 0 {
+			return errors.New("files.share_ttl and files.upload_ttl must be positive")
+		}
 	}
 	return nil
 }

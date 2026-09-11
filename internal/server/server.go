@@ -18,6 +18,7 @@ type Server struct {
 	http               *http.Server
 	authToken          string
 	peerTokenValidator func(string) bool
+	publicPathPrefixes []string
 	runtimeInfo        RuntimeInfo
 }
 
@@ -64,6 +65,13 @@ func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, l
 func (s *Server) SetAuthToken(token string) { s.authToken = strings.TrimSpace(token) }
 
 func (s *Server) SetPeerTokenValidator(validator func(string) bool) { s.peerTokenValidator = validator }
+
+// SetPublicPathPrefixes allows capability URLs to work when management
+// authentication is enabled. Every handler under these prefixes must perform
+// its own bearer-like capability-token validation.
+func (s *Server) SetPublicPathPrefixes(prefixes ...string) {
+	s.publicPathPrefixes = append([]string(nil), prefixes...)
+}
 
 func (s *Server) SetRuntimeInfo(info RuntimeInfo) { s.runtimeInfo = info }
 
@@ -134,7 +142,7 @@ func newRequestID() string {
 
 func authentication(s *Server, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.authToken == "" || r.URL.Path == "/api/v1/system/health" {
+		if s.authToken == "" || r.URL.Path == "/api/v1/system/health" || s.isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -153,6 +161,15 @@ func authentication(s *Server, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isPublicPath(path string) bool {
+	for _, prefix := range s.publicPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 type responseCapture struct {

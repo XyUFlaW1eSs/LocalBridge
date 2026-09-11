@@ -87,3 +87,21 @@ func TestRequestIDValidation(t *testing.T) {
 		t.Fatalf("request ID was not sanitized: %q", recorder.Header().Get("X-Request-ID"))
 	}
 }
+
+func TestPublicPathPrefixStillRequiresCapabilityHandler(t *testing.T) {
+	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	s.SetAuthToken("0123456789abcdef")
+	s.SetPublicPathPrefixes("/share/", "/receive/")
+	public := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/share/random-capability", nil)
+	s.http.Handler.ServeHTTP(public, request)
+	if public.Code != http.StatusNotFound {
+		t.Fatalf("public capability path should reach route handler, got auth status %d", public.Code)
+	}
+	protected := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil)
+	s.http.Handler.ServeHTTP(protected, request)
+	if protected.Code != http.StatusUnauthorized {
+		t.Fatalf("management path should remain protected, got %d", protected.Code)
+	}
+}

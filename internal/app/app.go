@@ -13,6 +13,7 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/module"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/modules/clipboard"
 	deviceModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/device"
+	fileModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/files"
 	syncModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/sync"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
@@ -52,6 +53,18 @@ func New(cfg config.Config) (*App, error) {
 	if cfg.Clipboard.Enabled {
 		capabilities = append(capabilities, "clipboard.text.push", "clipboard.text.pull")
 	}
+	if cfg.Files.Enabled {
+		capabilities = append(capabilities, "files.share", "files.download", "files.receive", "files.resume")
+	}
+	if cfg.Files.Enabled {
+		fileStore, err := fileModule.New(cfg.Files, log)
+		if err != nil {
+			return nil, err
+		}
+		if err := manager.Register(fileStore); err != nil {
+			return nil, err
+		}
+	}
 	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, jobStore, log)
 	if err != nil {
 		return nil, err
@@ -67,6 +80,7 @@ func New(cfg config.Config) (*App, error) {
 	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, manager.Routes)
 	srv.SetAuthToken(authToken(cfg))
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
+	srv.SetPublicPathPrefixes("/share/", "/receive/")
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv}, nil
 }
