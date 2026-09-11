@@ -36,4 +36,3 @@
 4. 过期或撤销 token 无法读取、上传或修改传输状态。
 5. 路径穿越、符号链接逃逸、超大请求体、非法 Range 和校验和不匹配必须被拒绝。
 6. `go test ./...`、`go vet ./...`、`go build ./cmd/localbridge` 和 `git diff --check` 全部通过。
-

@@ -40,4 +40,3 @@ page boundary. It does not claim to deliver the Windows native shell, tray or Ex
 4. Expired or revoked tokens cannot read, upload or mutate transfer state.
 5. Traversal, symlink escape, oversized body, invalid Range and checksum mismatch are rejected.
 6. `go test ./...`, `go vet ./...`, `go build ./cmd/localbridge` and `git diff --check` pass.
-

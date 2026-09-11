@@ -94,4 +94,3 @@ the effective configuration endpoint without exposing secrets.
 The feature is not ready for v1.0 until a Windows-to-iPhone download, iPhone-to-Windows upload,
 multi-file share, QR scan, HTTP URL, interruption/resume, revoke/expiry, checksum mismatch,
 path traversal rejection, settings persistence and clean restart have all been tested.
-

@@ -85,4 +85,3 @@ created -> active -> completed / expired / revoked
 在 v1.0 前必须完成并测试：Windows 到 iPhone 下载、iPhone 到 Windows 上传、多文件分享、
 二维码扫描、HTTP URL、中断/续传、撤销/过期、校验和错误、路径穿越拒绝、设置持久化和
 干净重启恢复。
-

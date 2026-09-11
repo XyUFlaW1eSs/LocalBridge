@@ -76,4 +76,3 @@ configuration and build artifacts must never be committed.
 4. Windows packaging: tray, close-to-tray, startup and Explorer context menu.
 5. Notifications, sounds, transfer recovery and end-to-end tests.
 6. Security review, performance testing, bilingual release docs and v1.0 gate.
-
