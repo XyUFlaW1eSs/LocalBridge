@@ -19,9 +19,10 @@ collaboration platform.
   device registry, LAN discovery, diagnostics, shared retry/timeout policy and service/tray design.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.
-- **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer, URL push, image delivery,
-  notifications, composite context jobs and resumable transfer state. Current delivery starts
-  with the multi-file share model, QR/HTTP mobile pages and the Windows GUI foundation.
+- **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer foundation is implemented
+  (persisted shares/receives, mobile pages, HTTP Range and resumable Content-Range uploads).
+  Current delivery continues with QR generation, the Windows GUI foundation, URL push, image
+  delivery, notifications, composite context jobs and broader transfer state.
 - **Phase 5 / `v0.5.x` — Clients and devices:** native iOS/iPadOS, Android, macOS, Linux,
   Windows tray/service, CLI, diagnostics web page and multi-device targeting.
 - **Phase 6 / `v0.6.x` — Automation and plugins:** plugin SDK, permissions, hotkeys, browser

@@ -195,6 +195,32 @@ nonce，不包含认证凭据。
 当前任务查询接口是 `GET /api/v1/sync/jobs` 和 `GET /api/v1/sync/jobs/{id}`。Envelope 字段、状态转换、保留策略和限制请查看
 [同步引擎基础](sync.zh-CN.md)。
 
+## 文件分享与接收（Phase 4 基础）
+
+文件模块将元数据保存到 `files.store_path`，将接收数据写入 `files.receive_dir`。启用认证时，管理接口需要配置的
+Bearer Token 或 peer Token。`POST /api/v1/files/shares` 接收
+`{"files":[{"path":"C:\\Users\\me\\file.txt"}]}`，一次多选创建一条分享记录。`GET /api/v1/files/shares`
+列出记录但不返回源路径和 Token；`DELETE /api/v1/files/shares/{id}` 清除一条，`DELETE /api/v1/files/shares` 清除全部。
+可选的 `Idempotency-Key` Header（或请求体 `idempotency_key`）会让分享创建重试返回原记录。创建响应包含 `id`、`token`、
+`files`、`created_at`、`expires_at` 和 `url`；Token 是 256 位随机能力凭证。
+
+`POST /api/v1/files/receivers` 创建短期上传链接。`GET /api/v1/files/receives` 列出已完成接收记录，
+`DELETE /api/v1/files/receives/{id}` 同时删除记录和保存的文件。二维码/移动端分享 URL 是 `GET /share/{token}`，会
+渲染响应式页面并为每个文件提供下载链接；`GET /share/{token}/metadata` 返回 JSON 元数据。文件通过
+`GET /share/{token}/files/{file_id}` 下载并支持 HTTP `Range` 断点续传，响应包含 `Accept-Ranges: bytes` 和
+`X-Content-SHA256`。
+
+接收 URL 是 `GET /receive/{token}`。页面使用 `POST /receive/{token}/uploads` 发送
+`{"name":"photo.jpg","size":123456,"sha256":"<可选的小写 sha256>"}`，再使用
+`PUT /receive/{token}/uploads/{upload_id}` 和 `Content-Range: bytes start-end/total` 上传分片。单片最多 16 MiB，
+且必须连续；对已保存范围重复发送相同字节是幂等的，跳过偏移或冲突重放返回 `409`。完成时校验声明的 SHA-256，
+然后将生成的临时文件移动到 `files.receive_dir`。上传创建同样支持 `Idempotency-Key`。
+
+安全限制在存储前执行：源文件必须是普通且非符号链接文件；单文件、单次分享、接收配额和文件数限制由 `files.*` 控制；
+上传名称不能包含路径分隔符、控制字符或 `..`；接收路径由随机 ID 生成，客户端不能提供。Token 会过期且不会写入日志。
+公开的 `/share/` 和 `/receive/` 只有在 URL Token 作为能力凭证时才绕过管理认证；请将链接限制在可信局域网内。当前服务
+仍然是纯 HTTP，不应暴露到公网。
+
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；

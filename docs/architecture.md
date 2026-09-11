@@ -15,7 +15,7 @@ registration. Features live behind module interfaces and communicate through eve
 ┌──────────────────┐       HTTP/JSON       ┌─────────────────────────┐
 │ iPhone Shortcuts │ ────────────────────> │ LocalBridge Windows     │
 │ Push / Pull      │ <──────────────────── │ net/http + EventBus     │
-└──────────────────┘                      │ clipboard module        │
+└──────────────────┘                      │ clipboard + files       │
                                           └───────────┬─────────────┘
                                                       │ Win32 adapter
                                           ┌───────────▼─────────────┐
@@ -41,6 +41,9 @@ Shortcuts, which is compatible with iOS's background execution constraints.
   best-effort outbound delivery. Durable queues and retry policy belong to the future sync engine.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
   in a build-tagged adapter.
+- `internal/modules/files`: persisted share/receive metadata, capability URLs, safe source-file
+  inspection, HTTP Range downloads and Content-Range uploads. It owns generated receive paths and
+  does not depend on the clipboard module or GUI layer.
 
 ## Lifecycle
 

@@ -212,6 +212,39 @@ The current job inspection endpoints are `GET /api/v1/sync/jobs` and
 `GET /api/v1/sync/jobs/{id}`. See [Sync Engine Foundation](sync.md) for the Envelope fields,
 state transitions, retention and limitations.
 
+## File sharing and receiving (Phase 4 foundation)
+
+The file module stores metadata in `files.store_path` and received bytes below `files.receive_dir`.
+Management routes require the configured bearer or peer token when authentication is enabled.
+`POST /api/v1/files/shares` accepts `{"files":[{"path":"C:\\Users\\me\\file.txt"}]}` and creates
+one share record for a multi-file selection. `GET /api/v1/files/shares` lists records without source
+paths or tokens; `DELETE /api/v1/files/shares/{id}` clears one and `DELETE /api/v1/files/shares`
+clears all. An optional `Idempotency-Key` header (or `idempotency_key` body field) makes share
+creation retries return the original record. The create response includes `id`, `token`, `files`,
+`created_at`, `expires_at` and `url`; the token is a 256-bit random capability.
+
+`POST /api/v1/files/receivers` creates a short-lived upload link. `GET /api/v1/files/receives`
+lists completed receive records and `DELETE /api/v1/files/receives/{id}` removes both the record
+and stored file. The QR/mobile share URL is `GET /share/{token}`; it renders a responsive page with
+one download link per file. `GET /share/{token}/metadata` returns JSON metadata. Files are downloaded
+from `GET /share/{token}/files/{file_id}` and support HTTP `Range` requests for resume; the response
+includes `Accept-Ranges: bytes` and `X-Content-SHA256`.
+
+The receive URL is `GET /receive/{token}`. Its mobile page uses `POST /receive/{token}/uploads` with
+`{"name":"photo.jpg","size":123456,"sha256":"<optional lowercase sha256>"}`, then sends chunks
+to `PUT /receive/{token}/uploads/{upload_id}` using `Content-Range: bytes start-end/total`. Chunks
+are limited to 16 MiB and must be contiguous. Replaying an already stored range with identical bytes
+is idempotent; gaps or conflicting replays return `409`. Completion verifies the declared SHA-256
+before moving the generated temporary file into `files.receive_dir`. Upload creation also supports
+`Idempotency-Key`.
+
+Security limits are enforced before storage: sources must be regular non-symlink files; per-file,
+per-share, receive-quota and file-count limits come from `files.*`; upload names cannot contain path
+separators, control characters or `..`; received paths are generated from random IDs, never accepted
+from clients. Tokens expire and are never logged. Public `/share/` and `/receive/` routes bypass
+management authentication only because the URL token is the capability; keep these URLs on a trusted
+LAN. The current service is HTTP-only and is not intended for public-internet exposure.
+
 ## Errors
 
 Errors are JSON objects with an `error` string. `400` means malformed JSON, an invalid JSON
