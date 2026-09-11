@@ -105,6 +105,8 @@ private network profile. Do not expose port 8899 to the public internet.
 - [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Product plan and capability map](docs/product-plan.md)
+- [File sharing product plan](docs/file-sharing-product-plan.md)
+- [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)
 - [Detailed roadmap](docs/roadmap.md)
 - [Roadmap](ROADMAP.md)
 - [AI project context prompt](docs/ai-project-context-prompt.md)

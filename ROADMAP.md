@@ -20,7 +20,8 @@ collaboration platform.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.
 - **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer, URL push, image delivery,
-  notifications, composite context jobs and resumable transfer state.
+  notifications, composite context jobs and resumable transfer state. Current delivery starts
+  with the multi-file share model, QR/HTTP mobile pages and the Windows GUI foundation.
 - **Phase 5 / `v0.5.x` — Clients and devices:** native iOS/iPadOS, Android, macOS, Linux,
   Windows tray/service, CLI, diagnostics web page and multi-device targeting.
 - **Phase 6 / `v0.6.x` — Automation and plugins:** plugin SDK, permissions, hotkeys, browser
@@ -29,5 +30,7 @@ collaboration platform.
   artifacts, upgrade/rollback, recovery, performance budgets and conformance suite.
 
 The detailed capability map, brainstorm backlog, dependencies, priorities and release gates are
-in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/product-plan.md`](docs/product-plan.md).
+in [`docs/roadmap.md`](docs/roadmap.md), [`docs/product-plan.md`](docs/product-plan.md) and
+[`docs/file-sharing-product-plan.md`](docs/file-sharing-product-plan.md). The agent execution
+workflow is in [`docs/engineering-workflow.md`](docs/engineering-workflow.md).
 The development workflow is documented in [`docs/developer-guide.md`](docs/developer-guide.md).

@@ -22,7 +22,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
 | `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
-| `v0.4.x` | Phase 4 | Planned | Files, URLs, images, notifications and action delivery |
+| `v0.4.x` | Phase 4 | In progress | Resumable file sharing, mobile transfer pages and desktop GUI foundation |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
 | `v0.6.x` | Phase 6 | Planned | Automation, tray/service UX and plugin SDK |
 | `v1.0.0` | Phase 7 | Planned | Stable protocol, secure defaults and upgradeable releases |
@@ -113,7 +113,7 @@ Exit criteria: a paired phone or desktop client receives a Windows clipboard cha
 authenticated outbound path; rich content degrades safely; history survives a configured
 restart policy; duplicate and conflict tests pass.
 
-### Phase 4 — LAN collaboration modules
+### Phase 4 — LAN collaboration modules (in progress)
 
 Goal: move work context, not only clipboard text.
 
@@ -121,6 +121,14 @@ Planned modules:
 
 - File transfer with metadata, thumbnails, chunking, checksum verification, progress,
   pause/resume/cancel, expiration and safe destination handling.
+- A file-share batch model: one multi-file selection creates one expandable share record;
+  QR code and HTTP URL are alternate entry points to the same expiring public page.
+- A mobile-first download/upload page that uses browser save/share behavior on iPhone and
+  `Range`/`Content-Range` for interruption recovery.
+- A Windows GUI with File Share, Receive History and Settings pages. The first UI slice is
+  web-first so the transfer contract is testable on both Windows and iPhone; a Windows shell
+  owns tray, startup and Explorer context-menu integration.
+- Settings for close-to-tray, automatic acceptance, notification sounds and reset-to-default.
 - URL push with title/preview metadata, browser hand-off and optional URL privacy controls.
 - Image sending as a first-class payload, including compression and size thresholds.
 - Notification delivery with severity, expiry, acknowledgement and action payloads.
@@ -128,8 +136,9 @@ Planned modules:
 - A unified transfer/job status API for queued, active, completed, failed and cancelled work.
 
 Exit criteria: files and URLs can be sent in both directions on a trusted paired LAN with
-resume and integrity checks; notifications are bounded and observable; modules do not take
-direct dependencies on each other.
+resume and integrity checks; a multi-file QR/URL share works on iPhone; receive history and
+settings are persisted; the Windows GUI can create/revoke shares; notifications are bounded
+and observable; modules do not take direct dependencies on each other.
 
 ### Phase 5 — Multi-client and device ecosystem
 

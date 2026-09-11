@@ -97,6 +97,8 @@ Phase 1 最初没有认证。Phase 2.1 增加了可选 Bearer Token 认证，但
 - [Sprint 2.5 交付](docs/sprints/sprint-2.5.zh-CN.md)
 - [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
+- [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
+- [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)
 - [详细路线图](docs/roadmap.zh-CN.md)
 - [路线图（根目录）](ROADMAP.zh-CN.md)
 - [AI 项目上下文提示词](docs/ai-project-context-prompt.zh-CN.md)
