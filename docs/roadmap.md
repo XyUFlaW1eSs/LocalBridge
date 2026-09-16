@@ -20,7 +20,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | Release | Phase | Status | Result |
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
-| `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
+| `v0.2.x` | Phase 2 | In progress | Sprints 2.1–2.6 delivered through peer-token lifecycle; secure transport and production hardening remain |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
 | `v0.4.x` | Phase 4 | In progress | Sprint 4.2A–4.2D GUI, Windows shell, receive approval and native host are delivered; URL/image work remains |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
@@ -63,7 +63,7 @@ is complete until its acceptance criteria and release gate pass.
 - Device ID, SHA-256 deduplication and feedback-loop suppression.
 - Runtime diagnostics, tests and a runnable `v0.1.0` package.
 
-### Phase 2 — Platform hardening, trust and discovery (in progress; Sprints 2.1–2.5 delivered)
+### Phase 2 — Platform hardening, trust and discovery (in progress; Sprints 2.1–2.6 delivered)
 
 Goal: make the platform safe and diagnosable before adding more payload types.
 
@@ -77,9 +77,13 @@ Planned work:
 - Sprint 2.3 now provides optional UDP discovery as an ephemeral, untrusted reachability list;
   peer health, authenticated outbound transport and automatic provisioning remain pending.
 - Sprint 2.4 now accepts paired peer tokens at the protected HTTP boundary when authentication
-  is enabled; expiry, rotation and user-facing provisioning remain pending.
+  is enabled; Sprint 2.6 subsequently delivered expiry and rotation, while user-facing
+  provisioning remains pending.
 - Sprint 2.5 now provides peer capability probes and best-effort local clipboard forwarding;
   durable sync, retries, receipts and offline replay remain Phase 3 work.
+- Sprint 2.6 fixes credential persistence, adds expiry and bounded-overlap rotation, provides a
+  target-scoped rotation endpoint, and migrates affected legacy peers to `repair_required`;
+  protected-at-rest credentials and user-facing provisioning remain pending.
 - LAN discovery through mDNS or UDP broadcast, plus manual IP/port fallback.
 - Peer registry with online/last-seen/capability state and network-change recovery.
 - TLS or an equivalent authenticated local channel; no silent downgrade on paired links.

@@ -28,14 +28,20 @@ notepad .\configs\config.yaml
 security:
   auth_enabled: true
   bearer_token: "replace-with-a-long-random-token"
+  pairing_code: "replace-with-a-local-pairing-code"
+  peer_token_ttl: 720h
+  token_overlap_ttl: 10m
 ```
 
 请在仓库外生成 Token，例如在 PowerShell 中使用 `[guid]::NewGuid().ToString("N")`。Token 至少需要 16 个字符，
 实际使用时应采用更长的随机值。服务端不会记录 Token。
 
 如需配对另一台 LocalBridge 主机，设置本地 `security.pairing_code`，然后向 `POST /api/v1/devices/pair` 提交对端 ID、
-地址、端口和能力，并在对端安全保存返回的 peer Token。只有确认允许在配置端口上使用 UDP 广播时才启用
-`discovery.enabled`；发现不会授予信任。正数的 `device.health_interval` 会启用尽力而为的对端健康检查和本地剪贴板出站。
+地址、端口和能力，并在对端安全保存返回的 peer Token。它会在 `peer_token_ttl` 后过期，应在到期前通过
+`POST /api/v1/devices/{id}/token/rotate` 轮换；旧凭据只在短暂重叠期继续有效。注册表文件包含明文凭据，
+数据目录必须限制为当前用户访问；除非备份或支持包已加密，否则不要包含它。版本 1 注册表中缺失持久化 Token 的记录会变为
+`repair_required`，需要重新配对或由本机轮换。只有确认允许在配置端口上使用 UDP 广播时才启用 `discovery.enabled`；
+发现不会授予信任。正数的 `device.health_interval` 会启用尽力而为的对端健康检查和本地剪贴板出站。
 
 ## 3. 防火墙
 

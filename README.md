@@ -46,8 +46,8 @@ content itself is never logged.
 
 ## Quick start on Windows
 
-Requirements: Go 1.24 or newer and a trusted private LAN. The current service intentionally
-does not expose authentication or TLS; do not bind it to an untrusted network.
+Requirements: Go 1.24 or newer and a trusted private LAN. Bearer/peer authentication is optional,
+but TLS is not implemented; enable authentication for LAN deployment and never expose it publicly.
 
 ```powershell
 Copy-Item configs/config.example.yaml configs/config.yaml
@@ -120,6 +120,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 2.3 delivery](docs/sprints/sprint-2.3.md)
 - [Sprint 2.4 delivery](docs/sprints/sprint-2.4.md)
 - [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
+- [Sprint 2.6 peer-token lifecycle](docs/sprints/sprint-2.6.md)
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
@@ -127,6 +128,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 4.2B Windows shell foundation](docs/sprints/sprint-4.2b.md)
 - [Sprint 4.2C receive approval](docs/sprints/sprint-4.2c.md)
 - [Sprint 4.2D native Windows host](docs/sprints/sprint-4.2d.md)
+- [ADR 0009 peer-token lifecycle](docs/adr/0009-peer-token-lifecycle.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

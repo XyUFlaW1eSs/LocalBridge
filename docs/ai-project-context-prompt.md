@@ -30,10 +30,12 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - Phase 2.2 added an explicit pairing endpoint and persisted peer registry. Phase 2.3 added
   optional UDP discovery as an ephemeral, untrusted reachability list. Phase 2.4 lets paired
   peer tokens authenticate protected APIs when auth is enabled. Phase 2.5 added peer health
-  probes and best-effort local clipboard forwarding. Phase 3.1 added the generic Envelope,
+  probes and best-effort local clipboard forwarding. Phase 2.6 fixed token persistence and added
+  expiry, bounded-overlap rotation and legacy migration. Phase 3.1 added the generic Envelope,
   durable Job store and read-only job inspection; retries, offline replay, rich content, TLS
-  and a public-client ecosystem are not implemented yet. Phase 4 file-sharing work is now
-  being planned as a web-first, resumable transfer workflow with a Windows desktop shell.
+  and a public-client ecosystem are not implemented yet. Phase 4.1 and 4.2A–4.2D delivered
+  resumable file sharing/receiving, the three-section GUI, receive approval, Windows shell/tray
+  integration and a WebView2 host; URL/image modules remain open.
 - Windows-to-iPhone is currently a Pull flow: Windows updates in-memory latest; the iPhone
   must GET it. Paired LocalBridge desktop peers have best-effort outbound clipboard delivery,
   but iPhone automatic push and durable queue/retry guarantees do not exist.
@@ -50,13 +52,14 @@ actions between trusted devices without requiring a cloud account or vendor rela
 - `GET /api/v1/devices/{id}`: returns one paired peer without its token.
 - `POST /api/v1/devices/pair`: pairs a peer with configured `security.pairing_code` and returns
   a generated peer token once; re-pairing rotates it.
+- `POST /api/v1/devices/{id}/token/rotate`: rotates an expiring peer token and returns the new
+  credential once; remote rotation is scoped to management or that target peer.
 - `DELETE /api/v1/devices/{id}`: revokes a peer.
 - `GET /api/v1/devices/discovered`: lists ephemeral UDP discovery hints; discovered devices are
   not trusted and are not added to the paired registry.
-- File-sharing routes are not yet part of the current baseline. The required future contract is
-  documented in `docs/file-sharing-product-plan.md`: one multi-file share record, opaque public
-  token, QR/HTTP mobile page, HTTP `Range` downloads, `Content-Range` uploads, expiry/revocation,
-  checksum verification and safe path boundaries.
+- File-sharing routes are implemented: one multi-file share record, opaque expiring public token,
+  QR/HTTP mobile pages, HTTP `Range` downloads, resumable `Content-Range` uploads, optional receive
+  approval, checksum verification and safe path boundaries. See `docs/protocol.md`.
 - Phase 1 default maximum is 1048576 UTF-8 bytes. Hashes are SHA-256; duplicate hashes are
   ignored. Remote writes have a short suppression window to prevent watcher echo.
 - The complete contract is in `docs/clipboard.md` and `docs/protocol.md`.
@@ -82,11 +85,12 @@ actions between trusted devices without requiring a cloud account or vendor rela
 
 ## Direction of future work
 
-1. Phase 2 / v0.2.x: configuration hardening, token expiry/rotation, TLS, diagnostics, shared
+1. Phase 2 / v0.2.x: configuration hardening, protected credential storage/provisioning, TLS,
+   diagnostics, shared
    retries/timeouts, persistence boundary and Windows service/tray design. Request IDs,
    capabilities, transition auth, explicit pairing, peer registry, peer-token authentication,
-   peer health and best-effort outbound clipboard are already partially delivered; UDP discovery
-   is implemented only as an untrusted hint.
+   peer health, best-effort outbound clipboard and expiring token rotation are already partially
+   delivered; UDP discovery is implemented only as an untrusted hint.
 2. Phase 3 / v0.3.x: retry/offline policy, receipts, conflict/idempotency rules, history, rich
    clipboard, images, HTML/RTF and screenshots. Envelope/job state is partially delivered.
 3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, QR/HTTP mobile download/upload

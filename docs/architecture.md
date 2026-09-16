@@ -35,8 +35,9 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/module`: lifecycle and route contract for pluggable features.
 - `internal/eventbus`: in-process decoupling. Subscribers must tolerate dropped events when
   their buffer is full; events are notifications, not a durable queue.
-- `internal/modules/device`: local device identity, explicit pairing and the persisted peer
-  registry. LAN discovery will remain a reachability hint and must not directly grant trust.
+- `internal/modules/device`: local device identity, explicit pairing and the versioned persisted
+  peer registry. Public models exclude credentials; the private registry stores issue/expiry and
+  bounded rotation-overlap state. LAN discovery remains a reachability hint and never grants trust.
 - `internal/transport`: bounded HTTP JSON client used for peer capabilities, health checks and
   best-effort outbound delivery. Durable queues and retry policy belong to the future sync engine.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
@@ -98,6 +99,15 @@ tray notification and applies the configured sound policy. On Windows a pure-Go 
 navigates only to the local GUI origin. Its window procedure converts close into hide when
 `minimize_to_tray` is enabled; tray actions restore the same window. Missing WebView2 falls back
 to the system browser.
+
+## Device credential flow
+
+Pairing creates a random 256-bit peer token and stores it only in the private registry model. Public
+device responses contain lifecycle timestamps, not credential values. A rotation installs a new
+token and retains the still-valid previous token for a short configured overlap. Validation accepts
+only unexpired current/overlap credentials. Expired peers are excluded from health probes and
+outbound forwarding. Registry version 1 migrates to version 2; entries affected by the former
+non-persistence bug are marked `repair_required` rather than silently trusted.
 
 ## Extension rule
 

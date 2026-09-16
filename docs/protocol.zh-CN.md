@@ -147,7 +147,9 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
       "capabilities": ["clipboard.text.push"],
       "status": "paired",
       "paired_at": "2026-08-04T00:00:00Z",
-      "last_seen": "2026-08-04T00:00:00Z"
+      "last_seen": "2026-08-04T00:00:00Z",
+      "token_issued_at": "2026-08-04T00:00:00Z",
+      "token_expires_at": "2026-09-03T00:00:00Z"
     }
   ]
 }
@@ -166,9 +168,32 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 }
 ```
 
+`security.pairing_code` 为空时配对功能关闭并返回 `503`；请求中提交空 code 不会启用它。
+
 响应会返回对端元数据和生成的 peer Token。Token 只在配对响应中返回，不会出现在 list/get 响应或日志中。对同一个
-设备 ID 再次配对会轮换 Token。`DELETE /api/v1/devices/{id}` 会撤销对端。本 Sprint 将注册表保存到
-`device.registry_path`；静态加密存储以及自动 Token 配置/轮换属于后续 Phase 2 工作。
+设备 ID 再次配对会轮换 Token。
+
+`POST /api/v1/devices/{id}/token/rotate` 可显式轮换凭据，返回：
+
+```json
+{
+  "rotated": true,
+  "device": {
+    "id": "iphone-personal",
+    "status": "paired",
+    "token_issued_at": "2026-08-04T00:10:00Z",
+    "token_expires_at": "2026-09-03T00:10:00Z"
+  },
+  "token": "<新的-256-bit-peer-token>"
+}
+```
+
+新 Token 只显示一次。远程调用方必须使用管理 Token，或目标设备自己的当前/重叠期 Token；其他对端不能替它轮换。
+本机回环管理允许执行。旧 Token 仅在 `security.token_overlap_ttl` 内继续有效，而且绝不会超过自身原始过期时间。
+`DELETE /api/v1/devices/{id}` 会立即撤销对端。
+
+`device.registry_path` 注册表包含敏感明文凭据，必须限制为操作系统当前用户访问。版本 1 注册表会自动迁移；缺少凭据的
+对端变为 `repair_required`。过期对端显示 `token_expired`，在重新配对或轮换前不会用于探测和转发。
 
 ### 局域网发现
 
@@ -260,8 +285,9 @@ Windows Explorer 动词使用 `localbridge.exe -share <file> [file...]`。参数
 ## 错误
 
 错误是包含 `error` 字符串的 JSON 对象。`400` 表示 JSON 格式错误、JSON 结构错误或内容为空；`404` 表示没有最新项目；
-`413` 表示超过配置的字节限制；`503` 表示系统剪贴板不可用或 Windows 写入失败；`500` 表示未预期的内部错误。
-`401` 表示缺少或无效的认证。不支持的方法返回 `405`。错误响应包含 `request_id`，并在 `X-Request-ID` 响应
+`413` 表示超过配置的字节限制；`503` 表示系统剪贴板不可用、Windows 写入失败或配对尚未配置；`500` 表示未预期的内部错误。
+`401` 表示缺少或无效的认证；`403` 表示调用方已认证但无权执行目标操作。不支持的方法返回 `405`。错误响应包含
+`request_id`，并在 `X-Request-ID` 响应
 Header 中返回同一个值。
 
 ## 安全配置
@@ -271,6 +297,8 @@ security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
   pairing_code: "a-local-pairing-code"
+  peer_token_ttl: 720h
+  token_overlap_ttl: 10m
 
 discovery:
   enabled: false
@@ -281,10 +309,11 @@ device:
   health_interval: 30s
 ```
 
-服务端使用常量时间比较 Token，并且不会把 Token 写入日志。只有启用认证后 peer Token 才会生效。这是 Phase 2 的过渡机制；
-后续配对流程会自动配置和轮换管理凭据，不再要求用户直接编辑 YAML 中的密钥。
+服务端通过固定长度摘要比较 Token，并且不会把 Token 写入日志。只有启用认证后，peer Token 才会在全局 HTTP 边界生效。
+重叠期必须短于 peer Token 有效期。管理凭据自动配置和操作系统保护的密钥存储仍属于后续加固。
 
 ## 兼容性与安全
 
 `/api/v1` 前缀用于向后兼容的增量扩展。新的内容类型应复用 `Item` 信封并增加 MIME 类型。破坏性变更需要使用
-`/api/v2` 并编写 ADR。当前服务没有认证或加密，因此客户端必须使用可信局域网，不要发送密码等敏感信息。
+`/api/v2` 并编写 ADR。认证是可选的，局域网流量尚未加密，因此客户端必须使用可信私有局域网；网络部署应启用认证，
+且不得将端口暴露到公网。

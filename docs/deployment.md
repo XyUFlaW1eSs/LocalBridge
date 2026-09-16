@@ -29,6 +29,9 @@ devices to connect:
 security:
   auth_enabled: true
   bearer_token: "replace-with-a-long-random-token"
+  pairing_code: "replace-with-a-local-pairing-code"
+  peer_token_ttl: 720h
+  token_overlap_ttl: 10m
 ```
 
 Generate a token outside the repository, for example with
@@ -37,8 +40,13 @@ use a longer random value in practice. The server never logs it.
 
 To pair another LocalBridge host, set a local `security.pairing_code`, then call
 `POST /api/v1/devices/pair` with the peer's ID, address, port and capabilities. Store the
-returned peer token on the peer side. Set `discovery.enabled: true` only when UDP broadcast on
-the configured port is acceptable; discovery does not grant trust. A positive
+returned peer token on the peer side. It expires after `peer_token_ttl`; rotate it before expiry
+with `POST /api/v1/devices/{id}/token/rotate`. The old credential remains usable only for the
+short overlap period. The registry file contains plaintext credentials, so keep the data directory
+private and exclude it from backups or support bundles unless it is encrypted. Version 1 registry
+entries without a persisted token become `repair_required` and must be paired or locally rotated.
+Set `discovery.enabled: true` only when UDP broadcast on the configured port is acceptable;
+discovery does not grant trust. A positive
 `device.health_interval` enables best-effort peer health checks and local clipboard forwarding.
 
 ## 3. Firewall

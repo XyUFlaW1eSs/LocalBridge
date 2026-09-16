@@ -154,7 +154,9 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
       "capabilities": ["clipboard.text.push"],
       "status": "paired",
       "paired_at": "2026-08-04T00:00:00Z",
-      "last_seen": "2026-08-04T00:00:00Z"
+      "last_seen": "2026-08-04T00:00:00Z",
+      "token_issued_at": "2026-08-04T00:00:00Z",
+      "token_expires_at": "2026-09-03T00:00:00Z"
     }
   ]
 }
@@ -174,11 +176,37 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
 }
 ```
 
+Pairing is disabled when `security.pairing_code` is empty and returns `503`; an empty request code
+does not enable it.
+
 The response returns the peer metadata and a generated peer token. The token is returned only
 by the pairing response and is not returned by list/get endpoints or written to logs. Pairing
-the same device ID rotates its token. `DELETE /api/v1/devices/{id}` revokes a peer. This Sprint
-stores the registry at `device.registry_path`; encrypted-at-rest storage and automatic token
-provisioning/rotation are later Phase 2 work.
+the same device ID rotates its token.
+
+`POST /api/v1/devices/{id}/token/rotate` explicitly rotates a credential and returns:
+
+```json
+{
+  "rotated": true,
+  "device": {
+    "id": "iphone-personal",
+    "status": "paired",
+    "token_issued_at": "2026-08-04T00:10:00Z",
+    "token_expires_at": "2026-09-03T00:10:00Z"
+  },
+  "token": "<new-256-bit-peer-token>"
+}
+```
+
+The new token is shown once. A remote caller must authenticate with the management token or
+that target device's own current/overlap token; another peer cannot rotate it. Loopback management
+is allowed. The old token remains accepted only for `security.token_overlap_ttl` and never beyond
+its original expiry. `DELETE /api/v1/devices/{id}` revokes a peer immediately.
+
+The registry at `device.registry_path` contains sensitive plaintext credentials and must be kept
+private to the operating-system user. Version 1 registries migrate automatically; peers whose
+credentials were absent become `repair_required`. An expired peer reports `token_expired` and is
+not used for probes or forwarding until it is rotated or paired again.
 
 ### LAN discovery
 
@@ -303,7 +331,9 @@ Errors are JSON objects with an `error` string. `400` means malformed JSON, an i
 shape or empty content; `404` means no latest item; `413` means the configured byte limit
 was exceeded; `503` means the system clipboard is unavailable or a Windows write failed;
 `500` is an unexpected internal error. `401` means authentication is missing or invalid.
-Unsupported methods return `405`. Error responses include `request_id` and the same value in
+`403` means the caller is authenticated but not allowed for the target operation. `503` also
+indicates that pairing has not been configured when the pairing endpoint is used. Unsupported
+methods return `405`. Error responses include `request_id` and the same value in
 the `X-Request-ID` response header.
 
 ## Security configuration
@@ -313,6 +343,8 @@ security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
   pairing_code: "a-local-pairing-code"
+  peer_token_ttl: 720h
+  token_overlap_ttl: 10m
 
 discovery:
   enabled: false
@@ -323,14 +355,14 @@ device:
   health_interval: 30s
 ```
 
-The token is compared in constant time and is never written to logs. Peer tokens are accepted
-only after authentication is enabled. This configuration is a Phase 2 transition mechanism;
-later pairing work will provision and rotate the management credential without requiring users
-to edit a secret directly in YAML.
+Tokens are compared using fixed-size digests and are never written to logs. Peer tokens are
+accepted at the global HTTP boundary only after authentication is enabled. The overlap duration
+must be shorter than the peer-token lifetime. Management credential provisioning and operating-
+system protected secret storage remain future hardening work.
 
 ## Compatibility and security
 
 The `/api/v1` prefix is reserved for backward-compatible additions. New content types should
 reuse the `Item` envelope and add a new MIME type. Breaking changes require `/api/v2` and an
-ADR. The service currently has no authentication or encryption, so clients must use a trusted
-LAN and must not send secrets.
+ADR. Authentication is optional and LAN traffic is not encrypted, so clients must use a trusted
+private LAN, enable authentication for network deployment and must not expose the port publicly.

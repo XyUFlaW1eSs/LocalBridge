@@ -25,8 +25,9 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - Phase 2.1 已增加可选 Bearer 认证、请求 ID 和能力发现。
 - Phase 2.2 已增加显式配对接口和持久化对端注册表；Phase 2.3 已增加可选 UDP 发现，结果只是临时且不可信的可达性列表；
   Phase 2.4 已让启用认证时的受保护 API 接受已配对 peer Token；Phase 2.5 已增加对端健康探测和本地剪贴板尽力而为出站。
-  Phase 3.1 已增加通用 Envelope、持久化 Job 存储和只读查询；重试、离线重放、富内容、TLS 和公共客户端生态尚未实现。
-  Phase 4 的文件分享工作现在按 Web-first、可断点续传的传输流程规划，并由 Windows 桌面外壳承载。
+  Phase 2.6 已修复 Token 持久化，并增加过期、有界重叠轮换和旧注册表迁移。Phase 3.1 已增加通用 Envelope、持久化 Job
+  存储和只读查询；重试、离线重放、富内容、TLS 和公共客户端生态尚未实现。Phase 4.1 与 4.2A–4.2D 已交付可续传文件
+  分享/接收、三分区 GUI、接收确认、Windows 外壳/托盘集成和 WebView2 宿主；URL/图片模块仍待实现。
 - 当前 Windows 到 iPhone 是 Pull 流程：Windows 更新内存中的 latest，iPhone 必须 GET。已配对 LocalBridge 桌面主机支持尽力而为的剪贴板出站，
   但 iPhone 自动推送和持久化队列/重试保证尚不存在。
 
@@ -40,10 +41,11 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - `GET /api/v1/devices`：列出本地设备和已配对对端，不返回 peer Token。
 - `GET /api/v1/devices/{id}`：返回单个已配对对端，不返回其 Token。
 - `POST /api/v1/devices/pair`：使用配置的 `security.pairing_code` 配对对端，并只在响应中返回一次生成的 peer Token；再次配对会轮换它。
+- `POST /api/v1/devices/{id}/token/rotate`：轮换会过期的 peer Token，新凭据只返回一次；远程轮换限定为管理方或目标对端自身。
 - `DELETE /api/v1/devices/{id}`：撤销对端。
 - `GET /api/v1/devices/discovered`：列出临时 UDP 发现提示；发现到的设备不可信，也不会进入已配对注册表。
-- 文件分享路由尚未进入当前基线。所需契约记录在 `docs/file-sharing-product-plan.zh-CN.md`：一条多文件分享记录、
-  不透明公开 token、二维码/HTTP 移动端页面、HTTP `Range` 下载、`Content-Range` 上传、过期/撤销、校验和验证和安全路径边界。
+- 文件分享路由已实现：一条多文件分享记录、不透明且会过期的公开 Token、二维码/HTTP 移动端页面、HTTP `Range` 下载、
+  可恢复的 `Content-Range` 上传、可选接收确认、校验和验证和安全路径边界。详见 `docs/protocol.zh-CN.md`。
 - Phase 1 默认最大值是 1048576 UTF-8 字节。hash 使用 SHA-256；相同 hash 会被忽略。远程写入有短暂抑制窗口，避免监听器回声。
 - 完整契约见 `docs/clipboard.md` 和 `docs/protocol.md`。
 
@@ -64,8 +66,9 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 
 ## 后续开发方向
 
-1. Phase 2 / v0.2.x：配置加固、Token 过期/轮换、TLS、诊断、共享重试/超时、持久化边界和 Windows 服务/托盘设计。
-   请求 ID、能力、过渡认证、显式配对、对端注册表、不可信 UDP 发现提示、peer Token 认证、对端健康和尽力而为出站已部分交付。
+1. Phase 2 / v0.2.x：配置加固、受保护的凭据存储/配置、TLS、诊断、共享重试/超时、持久化边界和 Windows 服务设计。
+   请求 ID、能力、过渡认证、显式配对、对端注册表、不可信 UDP 发现提示、peer Token 认证、对端健康、尽力而为出站和
+   会过期的 Token 轮换已部分交付。
 2. Phase 3 / v0.3.x：重试/离线策略、回执、冲突/幂等规则、历史、富剪贴板、图片、HTML/RTF 和截图；Envelope/Job 状态已部分交付。
 3. Phase 4 / v0.4.x：支持恢复和完整性校验的文件传输、二维码/HTTP 移动端下载/上传页面、Windows 文件分享/接受记录/设置 GUI，
    以及 URL 推送、图片投递、通知、截图和组合上下文任务。

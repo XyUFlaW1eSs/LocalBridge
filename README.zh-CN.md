@@ -36,7 +36,8 @@ GUI 现由 WebView2 原生窗口承载，关闭窗口会遵循 `minimize_to_tray
 
 ## Windows 快速开始
 
-要求：Go 1.24 或更高版本，以及可信的私有局域网。当前服务没有认证或 TLS，不能绑定到不可信网络。
+要求：Go 1.24 或更高版本，以及可信的私有局域网。Bearer/peer 认证可选，但尚未实现 TLS；局域网部署应启用认证，
+且绝不能暴露到公网。
 
 ```powershell
 Copy-Item configs/config.example.yaml configs/config.yaml
@@ -106,6 +107,7 @@ go build ./cmd/localbridge
 - [Sprint 2.3 交付](docs/sprints/sprint-2.3.zh-CN.md)
 - [Sprint 2.4 交付](docs/sprints/sprint-2.4.zh-CN.md)
 - [Sprint 2.5 交付](docs/sprints/sprint-2.5.zh-CN.md)
+- [Sprint 2.6 peer Token 生命周期](docs/sprints/sprint-2.6.zh-CN.md)
 - [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [Sprint 4.1 文件传输](docs/sprints/sprint-4.1-file-transfer.zh-CN.md)
 - [Sprint 4.2 桌面 GUI](docs/sprints/sprint-4.2-desktop-gui.zh-CN.md)
@@ -113,6 +115,7 @@ go build ./cmd/localbridge
 - [Sprint 4.2B Windows 外壳基础](docs/sprints/sprint-4.2b.zh-CN.md)
 - [Sprint 4.2C 接收确认](docs/sprints/sprint-4.2c.zh-CN.md)
 - [Sprint 4.2D Windows 原生宿主](docs/sprints/sprint-4.2d.zh-CN.md)
+- [ADR 0009 peer Token 生命周期](docs/adr/0009-peer-token-lifecycle.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
 - [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)
