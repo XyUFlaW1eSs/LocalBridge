@@ -19,8 +19,18 @@ func TestSettingsPersistenceAndReset(t *testing.T) {
 	}
 	value := Defaults()
 	value.AutoStart = true
+	listenerCalls := 0
+	store.AddListener(func(updated Settings) {
+		listenerCalls++
+		if !updated.AutoStart {
+			t.Errorf("listener received stale settings: %#v", updated)
+		}
+	})
 	if _, err := store.Set(value); err != nil {
 		t.Fatal(err)
+	}
+	if listenerCalls != 1 {
+		t.Fatalf("settings listener calls=%d", listenerCalls)
 	}
 	reloaded, err := NewStore(path)
 	if err != nil {

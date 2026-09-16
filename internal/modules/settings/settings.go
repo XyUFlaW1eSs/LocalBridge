@@ -31,6 +31,7 @@ func New(cfg config.SettingsConfig, logger *slog.Logger) (*Module, error) {
 func (m *Module) Name() string                { return "settings" }
 func (m *Module) Start(context.Context) error { m.logger.Info("settings module started"); return nil }
 func (m *Module) Stop(context.Context) error  { m.logger.Info("settings module stopped"); return nil }
+func (m *Module) Store() *Store               { return m.store }
 
 func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/settings", m.handleGet)

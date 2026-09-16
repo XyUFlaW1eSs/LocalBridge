@@ -4,15 +4,12 @@ package native
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
@@ -21,46 +18,49 @@ import (
 )
 
 const (
-	wmDestroy        = 0x0002
-	wmCommand        = 0x0111
-	wmNull           = 0x0000
-	wmUser           = 0x0400
-	wmTray           = wmUser + 1
-	wmRButtonUp      = 0x0205
-	wmLButtonDblClk  = 0x0203
-	nimAdd           = 0x00000000
-	nimDelete        = 0x00000002
-	nimModify        = 0x00000001
-	nifMessage       = 0x00000001
-	nifIcon          = 0x00000002
-	nifTip           = 0x00000004
-	nifInfo          = 0x00000010
-	mfString         = 0x00000000
-	tpmLeftAlign     = 0x0000
-	tpmBottomAlign   = 0x0020
-	menuOpenShare    = 41001
-	menuOpenReceive  = 41002
-	menuOpenSettings = 41003
-	menuExit         = 41004
-	idiApplication   = 32512
+	wmDestroy         = 0x0002
+	wmClose           = 0x0010
+	wmCommand         = 0x0111
+	wmNull            = 0x0000
+	wmUser            = 0x0400
+	wmTray            = wmUser + 1
+	wmRButtonUp       = 0x0205
+	wmLButtonDblClk   = 0x0203
+	nimAdd            = 0x00000000
+	nimDelete         = 0x00000002
+	nimModify         = 0x00000001
+	nifMessage        = 0x00000001
+	nifIcon           = 0x00000002
+	nifTip            = 0x00000004
+	nifInfo           = 0x00000010
+	mfString          = 0x00000000
+	tpmLeftAlign      = 0x0000
+	tpmBottomAlign    = 0x0020
+	menuOpenShare     = 41001
+	menuOpenReceive   = 41002
+	menuOpenSettings  = 41003
+	menuExit          = 41004
+	idiApplication    = 32512
 	mbIconInformation = 0x00000040
+	niifInfo          = 0x00000001
+	niifNoSound       = 0x00000010
 )
 
 type point struct{ X, Y int32 }
 
 type wndClassEx struct {
-	CbSize        uint32
-	Style         uint32
-	WndProc       uintptr
-	CbClsExtra    int32
-	CbWndExtra    int32
-	Instance      uintptr
-	Icon          uintptr
-	Cursor        uintptr
-	Background    uintptr
-	MenuName      *uint16
-	ClassName     *uint16
-	IconSmall     uintptr
+	CbSize     uint32
+	Style      uint32
+	WndProc    uintptr
+	CbClsExtra int32
+	CbWndExtra int32
+	Instance   uintptr
+	Icon       uintptr
+	Cursor     uintptr
+	Background uintptr
+	MenuName   *uint16
+	ClassName  *uint16
+	IconSmall  uintptr
 }
 
 type message struct {
@@ -91,27 +91,28 @@ type notifyIconData struct {
 }
 
 var (
-	user32                 = windows.NewLazySystemDLL("user32.dll")
-	shell32                = windows.NewLazySystemDLL("shell32.dll")
-	procRegisterClassExW   = user32.NewProc("RegisterClassExW")
-	procCreateWindowExW    = user32.NewProc("CreateWindowExW")
-	procDestroyWindow      = user32.NewProc("DestroyWindow")
-	procDefWindowProcW     = user32.NewProc("DefWindowProcW")
-	procDispatchMessageW   = user32.NewProc("DispatchMessageW")
-	procGetMessageW        = user32.NewProc("GetMessageW")
-	procPostQuitMessage    = user32.NewProc("PostQuitMessage")
-	procTranslateMessage  = user32.NewProc("TranslateMessage")
-	procShowWindow         = user32.NewProc("ShowWindow")
-	procLoadIconW          = user32.NewProc("LoadIconW")
-	procCreatePopupMenu    = user32.NewProc("CreatePopupMenu")
-	procAppendMenuW        = user32.NewProc("AppendMenuW")
-	procTrackPopupMenu    = user32.NewProc("TrackPopupMenu")
-	procDestroyMenu        = user32.NewProc("DestroyMenu")
-	procGetCursorPos       = user32.NewProc("GetCursorPos")
+	user32                  = windows.NewLazySystemDLL("user32.dll")
+	shell32                 = windows.NewLazySystemDLL("shell32.dll")
+	kernel32                = windows.NewLazySystemDLL("kernel32.dll")
+	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
+	procRegisterClassExW    = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW     = user32.NewProc("CreateWindowExW")
+	procDestroyWindow       = user32.NewProc("DestroyWindow")
+	procDefWindowProcW      = user32.NewProc("DefWindowProcW")
+	procDispatchMessageW    = user32.NewProc("DispatchMessageW")
+	procGetMessageW         = user32.NewProc("GetMessageW")
+	procPostQuitMessage     = user32.NewProc("PostQuitMessage")
+	procTranslateMessage    = user32.NewProc("TranslateMessage")
+	procLoadIconW           = user32.NewProc("LoadIconW")
+	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
+	procAppendMenuW         = user32.NewProc("AppendMenuW")
+	procTrackPopupMenu      = user32.NewProc("TrackPopupMenu")
+	procDestroyMenu         = user32.NewProc("DestroyMenu")
+	procGetCursorPos        = user32.NewProc("GetCursorPos")
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
-	procPostMessageW       = user32.NewProc("PostMessageW")
-	procMessageBeep        = user32.NewProc("MessageBeep")
-	procShellNotifyIconW   = shell32.NewProc("Shell_NotifyIconW")
+	procPostMessageW        = user32.NewProc("PostMessageW")
+	procMessageBeep         = user32.NewProc("MessageBeep")
+	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
 )
 
 var trayWindows sync.Map
@@ -184,7 +185,7 @@ func (b *platformBackend) requestStop() {
 		hwnd := b.hwnd
 		b.mu.RUnlock()
 		if hwnd != 0 {
-			_, _, _ = procPostMessageW.Call(hwnd, wmDestroy, 0, 0)
+			_, _, _ = procPostMessageW.Call(hwnd, wmClose, 0, 0)
 		}
 	}
 }
@@ -201,6 +202,7 @@ func (b *platformBackend) Notify(event eventbus.Event, value settings.Settings) 
 	}
 	nid := b.notifyData(nidHwnd)
 	nid.Flags = nifInfo
+	nid.InfoFlags = niifInfo | niifNoSound
 	title, _ := windows.UTF16FromString("LocalBridge")
 	copy(nid.InfoTitle[:], title)
 	messageText := "文件分享完成"
@@ -209,16 +211,24 @@ func (b *platformBackend) Notify(event eventbus.Event, value settings.Settings) 
 	}
 	message, _ := windows.UTF16FromString(messageText)
 	copy(nid.Info[:], message)
-	if value.NotificationSound {
-		_, _, _ = procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&nid)))
-	}
-	if (event.Type == eventbus.FileSent && value.SendSound) || (event.Type == eventbus.FileReceived && value.ReceiveSound) {
+	_, _, _ = procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&nid)))
+	if value.NotificationSound && ((event.Type == eventbus.FileSent && value.SendSound) || (event.Type == eventbus.FileReceived && value.ReceiveSound)) {
 		_, _, _ = procMessageBeep.Call(mbIconInformation)
 	}
 }
 
+func (b *platformBackend) OpenGUI(view string) error {
+	b.openGUI(view)
+	return nil
+}
+
 func (b *platformBackend) trayLoop() {
 	defer close(b.done)
+	select {
+	case <-b.stop:
+		return
+	default:
+	}
 	class, err := windows.UTF16PtrFromString("LocalBridgeTrayWindow")
 	if err != nil {
 		b.logger.Warn("native tray unavailable", "error", err)
@@ -226,12 +236,13 @@ func (b *platformBackend) trayLoop() {
 	}
 	b.className = class
 	callback := windows.NewCallback(b.wndProc)
-	wc := wndClassEx{CbSize: uint32(unsafe.Sizeof(wndClassEx{})), WndProc: callback, ClassName: class}
+	instance, _, _ := procGetModuleHandleW.Call(0)
+	wc := wndClassEx{CbSize: uint32(unsafe.Sizeof(wndClassEx{})), WndProc: callback, Instance: instance, ClassName: class}
 	if _, _, callErr := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); callErr != syscall.Errno(0) && callErr != windows.ERROR_CLASS_ALREADY_EXISTS {
 		b.logger.Warn("native tray class registration failed", "error", callErr)
 		return
 	}
-	hwnd, _, callErr := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(class)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	hwnd, _, callErr := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(class)), 0, 0, 0, 0, 0, 0, 0, instance, 0)
 	if hwnd == 0 {
 		b.logger.Warn("native tray window creation failed", "error", callErr)
 		return
@@ -249,6 +260,11 @@ func (b *platformBackend) trayLoop() {
 		_, _, _ = procDestroyWindow.Call(hwnd)
 	}()
 	b.addIcon(hwnd)
+	select {
+	case <-b.stop:
+		_, _, _ = procPostMessageW.Call(hwnd, wmClose, 0, 0)
+	default:
+	}
 	var msg message
 	for {
 		result, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -282,8 +298,12 @@ func (b *platformBackend) wndProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 				b.cfg.OnExit()
 			}
 		}
+	case wmClose:
+		_, _, _ = procDestroyWindow.Call(hwnd)
+		return 0
 	case wmDestroy:
 		_, _, _ = procPostQuitMessage.Call(0)
+		return 0
 	}
 	return callDefWindowProc(hwnd, msg, wparam, lparam)
 }
@@ -348,5 +368,7 @@ func (b *platformBackend) openGUI(view string) {
 		}
 		return
 	}
-	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url).Start()
+	if err := OpenURL(url); err != nil {
+		b.logger.Warn("open browser GUI failed", "error", err)
+	}
 }

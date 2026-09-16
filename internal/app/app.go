@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
@@ -16,6 +18,7 @@ import (
 	fileModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/files"
 	settingsModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/settings"
 	syncModule "github.com/XyUFlaW1eSs/LocalBridge/internal/modules/sync"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/native"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
@@ -28,9 +31,21 @@ type App struct {
 	bus     *eventbus.Bus
 	manager *module.Manager
 	server  *server.Server
+	files   *fileModule.Module
+	native  *native.Module
+	exit    chan struct{}
+}
+
+type Options struct {
+	ConfigPath string
+	Executable string
 }
 
 func New(cfg config.Config) (*App, error) {
+	return NewWithOptions(cfg, Options{})
+}
+
+func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -65,12 +80,13 @@ func New(cfg config.Config) (*App, error) {
 	if err := manager.Register(settings); err != nil {
 		return nil, err
 	}
+	var files *fileModule.Module
 	if cfg.Files.Enabled {
-		fileStore, err := fileModule.New(cfg.Files, log)
+		files, err = fileModule.NewWithBus(cfg.Files, bus, log)
 		if err != nil {
 			return nil, err
 		}
-		if err := manager.Register(fileStore); err != nil {
+		if err := manager.Register(files); err != nil {
 			return nil, err
 		}
 	}
@@ -86,6 +102,24 @@ func New(cfg config.Config) (*App, error) {
 			return nil, err
 		}
 	}
+	exitRequests := make(chan struct{})
+	var exitOnce sync.Once
+	nativeModule, err := native.New(native.Config{
+		GUIURL:     fmt.Sprintf("http://127.0.0.1:%d/app/", cfg.Server.Port),
+		Executable: options.Executable,
+		ConfigPath: options.ConfigPath,
+		Settings:   settings.Store(),
+		Bus:        bus,
+		OnExit: func() {
+			exitOnce.Do(func() { close(exitRequests) })
+		},
+	}, log)
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.Register(nativeModule); err != nil {
+		return nil, err
+	}
 	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, func(mux *http.ServeMux) {
 		manager.Routes(mux)
 		web.Routes(mux)
@@ -94,7 +128,7 @@ func New(cfg config.Config) (*App, error) {
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetPublicPathPrefixes("/share/", "/receive/")
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
-	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv}, nil
+	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv, files: files, native: nativeModule, exit: exitRequests}, nil
 }
 
 func authToken(cfg config.Config) string {
@@ -131,3 +165,19 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 func (a *App) Logger() *slog.Logger    { return a.logger }
 func (a *App) EventBus() *eventbus.Bus { return a.bus }
+
+func (a *App) ExitRequests() <-chan struct{} { return a.exit }
+
+func (a *App) SharePaths(paths []string, idempotencyKey string) (fileModule.Share, error) {
+	if a.files == nil {
+		return fileModule.Share{}, errors.New("file sharing is disabled")
+	}
+	return a.files.CreateShare(paths, idempotencyKey)
+}
+
+func (a *App) OpenGUI(view string) error {
+	if a.native == nil {
+		return errors.New("native integration is unavailable")
+	}
+	return a.native.OpenGUI(view)
+}

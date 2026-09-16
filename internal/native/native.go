@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,7 @@ type backend interface {
 	Start(context.Context) error
 	Stop(context.Context) error
 	Notify(eventbus.Event, settings.Settings)
+	OpenGUI(string) error
 }
 
 type Module struct {
@@ -62,6 +64,8 @@ func New(cfg Config, logger *slog.Logger) (*Module, error) {
 
 func (m *Module) Name() string { return "native" }
 
+func (m *Module) Routes(*http.ServeMux) {}
+
 func (m *Module) Start(ctx context.Context) error {
 	if err := m.backend.ApplySettings(m.settings.Get()); err != nil {
 		return err
@@ -88,6 +92,8 @@ func (m *Module) Stop(ctx context.Context) error {
 	}
 	return m.backend.Stop(ctx)
 }
+
+func (m *Module) OpenGUI(view string) error { return m.backend.OpenGUI(view) }
 
 func (m *Module) notifyLoop(ctx context.Context, received, sent <-chan eventbus.Event) {
 	for {

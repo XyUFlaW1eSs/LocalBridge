@@ -13,6 +13,7 @@ const (
 	explorerKey     = `Software\Classes\*\shell\LocalBridgeShare\command`
 	explorerMenuKey = `Software\Classes\*\shell\LocalBridgeShare`
 	registryValue   = "LocalBridge"
+	explorerLabel   = "通过 LocalBridge 分享"
 )
 
 type Registry interface {
@@ -44,11 +45,25 @@ func SyncRegistry(reg Registry, executable, configPath string, value settings.Se
 		return err
 	}
 	if value.ExplorerContextMenu {
+		if err := reg.SetString(explorerMenuKey, "", explorerLabel); err != nil {
+			return fmt.Errorf("set Explorer context-menu label: %w", err)
+		}
+		if err := reg.SetString(explorerMenuKey, "Icon", executable); err != nil {
+			return fmt.Errorf("set Explorer context-menu icon: %w", err)
+		}
+		if err := reg.SetString(explorerMenuKey, "MultiSelectModel", "Player"); err != nil {
+			return fmt.Errorf("set Explorer multi-select mode: %w", err)
+		}
 		if err := reg.SetString(explorerKey, "", explorerCommand); err != nil {
 			return fmt.Errorf("enable Explorer context menu: %w", err)
 		}
-	} else if err := reg.DeleteKey(explorerMenuKey); err != nil && !errors.Is(err, ErrRegistryNotFound) {
-		return fmt.Errorf("disable Explorer context menu: %w", err)
+	} else {
+		if err := reg.DeleteKey(explorerKey); err != nil && !errors.Is(err, ErrRegistryNotFound) {
+			return fmt.Errorf("disable Explorer context-menu command: %w", err)
+		}
+		if err := reg.DeleteKey(explorerMenuKey); err != nil && !errors.Is(err, ErrRegistryNotFound) {
+			return fmt.Errorf("disable Explorer context menu: %w", err)
+		}
 	}
 	return nil
 }

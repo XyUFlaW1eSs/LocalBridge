@@ -10,6 +10,7 @@ const (
 	ClipboardChanged     = "clipboard.changed"
 	DeviceConnected      = "device.connected"
 	DeviceDisconnected   = "device.disconnected"
+	FileSent             = "file.sent"
 	FileReceived         = "file.received"
 	ImageReceived        = "image.received"
 	NotificationReceived = "notification.received"

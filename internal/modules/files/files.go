@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/skip2/go-qrcode"
 )
@@ -24,6 +25,7 @@ import (
 type Module struct {
 	store  *Store
 	logger *slog.Logger
+	bus    *eventbus.Bus
 }
 
 type createShareRequest struct {
@@ -41,6 +43,10 @@ type createUploadRequest struct {
 }
 
 func New(cfg config.FilesConfig, logger *slog.Logger) (*Module, error) {
+	return NewWithBus(cfg, nil, logger)
+}
+
+func NewWithBus(cfg config.FilesConfig, bus *eventbus.Bus, logger *slog.Logger) (*Module, error) {
 	store, err := NewStore(cfg)
 	if err != nil {
 		return nil, err
@@ -48,14 +54,31 @@ func New(cfg config.FilesConfig, logger *slog.Logger) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Module{store: store, logger: logger}, nil
+	return &Module{store: store, logger: logger, bus: bus}, nil
 }
 
 func NewWithStore(store *Store, logger *slog.Logger) *Module {
+	return NewWithStoreAndBus(store, nil, logger)
+}
+
+func NewWithStoreAndBus(store *Store, bus *eventbus.Bus, logger *slog.Logger) *Module {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Module{store: store, logger: logger}
+	return &Module{store: store, logger: logger, bus: bus}
+}
+
+func (m *Module) CreateShare(paths []string, idempotencyKey string) (Share, error) {
+	if strings.TrimSpace(idempotencyKey) != "" {
+		if existing, ok := m.store.ShareByIdempotencyKey(strings.TrimSpace(idempotencyKey), time.Now().UTC()); ok {
+			return existing, nil
+		}
+	}
+	share, err := m.store.CreateShare(paths, idempotencyKey, time.Now().UTC())
+	if err == nil {
+		m.publishSent(share)
+	}
+	return share, err
 }
 
 func (m *Module) Name() string                { return "files" }
@@ -112,7 +135,7 @@ func (m *Module) handleCreateShare(w http.ResponseWriter, r *http.Request) {
 	if headerKey := strings.TrimSpace(r.Header.Get("Idempotency-Key")); headerKey != "" {
 		idempotencyKey = headerKey
 	}
-	share, err := m.store.CreateShare(paths, idempotencyKey, time.Now().UTC())
+	share, err := m.CreateShare(paths, idempotencyKey)
 	if err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "exceeds") {
@@ -239,6 +262,7 @@ func (m *Module) handleCreateBrowserShare(w http.ResponseWriter, r *http.Request
 	cleanup = nil
 	share.URL = publicURL(r, "/share/"+share.Token)
 	m.logger.Info("browser file share created", "share_id", share.ID, "file_count", len(share.Files), "total_bytes", total)
+	m.publishSent(share)
 	writeJSON(w, http.StatusCreated, share)
 }
 
@@ -472,7 +496,8 @@ func (m *Module) handleGetUpload(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) handleUploadChunk(w http.ResponseWriter, r *http.Request) {
 	uploadID := strings.TrimSpace(r.PathValue("uploadID"))
-	if _, ok := m.store.GetUpload(uploadID); !ok {
+	previous, ok := m.store.GetUpload(uploadID)
+	if !ok {
 		writeError(w, http.StatusNotFound, "upload not found", requestID(r))
 		return
 	}
@@ -507,10 +532,27 @@ func (m *Module) handleUploadChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Status == uploadStatusDone {
+		if previous.Status != uploadStatusDone && m.bus != nil {
+			m.bus.Publish(eventbus.Event{Type: eventbus.FileReceived, Data: map[string]any{
+				"upload_id": result.ID,
+				"size":      result.Size,
+			}})
+		}
 		writeJSON(w, http.StatusCreated, result)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (m *Module) publishSent(share Share) {
+	if m.bus == nil {
+		return
+	}
+	m.bus.Publish(eventbus.Event{Type: eventbus.FileSent, Data: map[string]any{
+		"share_id":    share.ID,
+		"file_count":  len(share.Files),
+		"total_bytes": shareTotal(share),
+	}})
 }
 
 func parseContentRange(value string) (int64, int64, int64, error) {

@@ -2,6 +2,7 @@ package files
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 )
 
 func testConfig(t *testing.T) config.FilesConfig {
@@ -452,6 +454,81 @@ func TestReceiveHTTPRejectsTraversalAndBadRanges(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad offset status=%d body=%s", response.StatusCode, readBody(response))
+	}
+}
+
+func TestFileTransferEventsArePublishedOnce(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := eventbus.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sentEvents := bus.Subscribe(ctx, eventbus.FileSent, 4)
+	receivedEvents := bus.Subscribe(ctx, eventbus.FileReceived, 4)
+	module := NewWithStoreAndBus(store, bus, nil)
+
+	source := filepath.Join(t.TempDir(), "event.txt")
+	if err := os.WriteFile(source, []byte("event"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := module.CreateShare([]string{source}, "event-share"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case event := <-sentEvents:
+		if event.Type != eventbus.FileSent {
+			t.Fatalf("unexpected sent event: %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("file.sent event was not published")
+	}
+	if _, err := module.CreateShare([]string{source}, "event-share"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case event := <-sentEvents:
+		t.Fatalf("idempotent retry published another event: %#v", event)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	mux := http.NewServeMux()
+	module.Routes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	receiver, err := store.CreateReceiver(time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := json.Marshal(map[string]any{"name": "received.txt", "size": 4})
+	response, err := http.Post(server.URL+"/receive/"+receiver.Token+"/uploads", "application/json", bytes.NewReader(metadata))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upload Upload
+	if err := json.NewDecoder(response.Body).Decode(&upload); err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	request, _ := http.NewRequest(http.MethodPut, server.URL+"/receive/"+receiver.Token+"/uploads/"+upload.ID, strings.NewReader("data"))
+	request.Header.Set("Content-Range", "bytes 0-3/4")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("complete upload status=%d body=%s", response.StatusCode, readBody(response))
+	}
+	_ = response.Body.Close()
+	select {
+	case event := <-receivedEvents:
+		if event.Type != eventbus.FileReceived {
+			t.Fatalf("unexpected receive event: %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("file.received event was not published")
 	}
 }
 

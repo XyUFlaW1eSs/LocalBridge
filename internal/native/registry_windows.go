@@ -9,7 +9,7 @@ type windowsRegistry struct{}
 func NewWindowsRegistry() Registry { return windowsRegistry{} }
 
 func (windowsRegistry) SetString(key, name, value string) error {
-	k, _, err := registry.CurrentUser.CreateKey(key, registry.SET_VALUE)
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, key, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
@@ -18,7 +18,7 @@ func (windowsRegistry) SetString(key, name, value string) error {
 }
 
 func (windowsRegistry) DeleteValue(key, name string) error {
-	k, err := registry.OpenKey(registry.CurrentUser, key, registry.SET_VALUE)
+	k, err := registry.OpenKey(registry.CURRENT_USER, key, registry.SET_VALUE)
 	if err != nil {
 		if err == registry.ErrNotExist {
 			return ErrRegistryNotFound
@@ -34,7 +34,7 @@ func (windowsRegistry) DeleteValue(key, name string) error {
 }
 
 func (windowsRegistry) DeleteKey(key string) error {
-	if err := registry.DeleteKey(registry.CurrentUser, key); err == registry.ErrNotExist {
+	if err := registry.DeleteKey(registry.CURRENT_USER, key); err == registry.ErrNotExist {
 		return ErrRegistryNotFound
 	} else {
 		return err

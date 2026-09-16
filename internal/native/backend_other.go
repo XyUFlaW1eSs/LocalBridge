@@ -12,8 +12,9 @@ import (
 
 type platformBackend struct{}
 
-func newBackend(Config, *slog.Logger) (backend, error) { return platformBackend{}, nil }
-func (platformBackend) ApplySettings(settings.Settings) error { return nil }
-func (platformBackend) Start(context.Context) error            { return nil }
-func (platformBackend) Stop(context.Context) error             { return nil }
+func newBackend(Config, *slog.Logger) (backend, error)           { return platformBackend{}, nil }
+func (platformBackend) ApplySettings(settings.Settings) error    { return nil }
+func (platformBackend) Start(context.Context) error              { return nil }
+func (platformBackend) Stop(context.Context) error               { return nil }
 func (platformBackend) Notify(eventbus.Event, settings.Settings) {}
+func (platformBackend) OpenGUI(string) error                     { return nil }
