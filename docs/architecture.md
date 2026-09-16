@@ -30,7 +30,8 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 
 - `cmd/localbridge`: flags, signals and process exit codes only.
 - `internal/app`: dependency composition; it is the only package that wires concrete modules.
-- `internal/config`: validated configuration, no environment-specific behavior in modules.
+- `internal/config`: versioned, migrated and validated configuration plus an explicitly redacted
+  diagnostic representation; no environment-specific behavior in modules.
 - `internal/server`: stable HTTP server and system endpoints.
 - `internal/module`: lifecycle and route contract for pluggable features.
 - `internal/eventbus`: in-process decoupling. Subscribers must tolerate dropped events when
@@ -108,6 +109,14 @@ token and retains the still-valid previous token for a short configured overlap.
 only unexpired current/overlap credentials. Expired peers are excluded from health probes and
 outbound forwarding. Registry version 1 migrates to version 2; entries affected by the former
 non-persistence bug are marked `repair_required` rather than silently trusted.
+
+## Configuration lifecycle
+
+The loader overlays a strict versioned YAML/JSON document on versioned defaults. Legacy version 0
+is migrated to the current schema in memory; unsupported future versions and unknown fields fail
+before application composition. The server receives only the redacted diagnostic representation.
+Its endpoint distinguishes management authentication from peer authentication and never exposes
+the source file path or credential values.
 
 ## Extension rule
 

@@ -14,6 +14,9 @@ All notable changes to LocalBridge are documented here.
 - Phase 2 Sprint 2.5: added peer health probes and best-effort outbound clipboard delivery for paired LocalBridge peers.
 - Phase 2 Sprint 2.6: fixed peer-token persistence across restart, added configurable expiry,
   bounded-overlap rotation, target-scoped rotation authorization and version 1 registry migration.
+- Phase 2 Sprint 2.7: added configuration schema v1, non-destructive legacy migration, strict
+  future/unknown input rejection, management-only redacted effective-configuration diagnostics
+  and a non-interactive `-check-config` command.
 - Phase 3 Sprint 3.1: added generic Envelopes, durable sync Jobs, retention bounds and read-only job inspection.
 - Phase 4 Sprint 4.2A: added the embedded `/app/` GUI, browser-safe multi-file shares, persisted
   receive records UI, real local QR PNG generation and versioned settings persistence.

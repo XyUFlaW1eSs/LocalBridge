@@ -42,6 +42,41 @@ This endpoint lets a client choose a compatible workflow before sending content:
 Capability names are opaque strings. Clients must tolerate unknown capabilities and must not
 assume that a capability exists without checking this endpoint.
 
+## Effective configuration diagnostics
+
+`GET /api/v1/system/config`
+
+This read-only management diagnostic reports the configuration after defaults and in-memory
+migration have been applied:
+
+```json
+{
+  "schema_version": 1,
+  "source_schema_version": 0,
+  "migrated": true,
+  "source": "file",
+  "effective": {
+    "server": {"host": "0.0.0.0", "port": 8899, "read_timeout": "5s"},
+    "security": {
+      "auth_enabled": true,
+      "bearer_token_configured": true,
+      "pairing_code_configured": true,
+      "peer_token_ttl": "720h0m0s",
+      "token_overlap_ttl": "10m0s"
+    }
+  }
+}
+```
+
+The actual response includes every non-secret effective section. It never includes the bearer
+token, pairing code or configuration-file path. When management authentication is disabled, only
+loopback access is allowed. When it is enabled, every request—including loopback—must use the
+management bearer token; peer tokens receive `403`. The capability name is `system.config.read`.
+
+The current root configuration schema is `version: 1`. Missing or explicit version 0 is migrated
+to version 1 in memory without rewriting the file. Negative and future versions, unknown JSON
+fields, and unknown YAML root keys/sections are rejected.
+
 ## Push clipboard
 
 `POST /api/v1/clipboard`

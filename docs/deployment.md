@@ -17,10 +17,17 @@ go build -trimpath -ldflags "-s -w" -o .\dist\localbridge.exe .\cmd\localbridge
 ```powershell
 Copy-Item .\configs\config.example.yaml .\configs\config.yaml
 notepad .\configs\config.yaml
+.\dist\localbridge.exe -check-config -config .\configs\config.yaml
 ```
 
 Set a stable `device.id`. Keep `server.host` as `0.0.0.0` for LAN use and choose a port that
 is not occupied. Never commit `configs/config.yaml` if it later contains credentials.
+
+The current root schema is `version: 1`. Existing files without a version are treated as legacy
+version 0 and migrated in memory; the service does not rewrite them. After validating a legacy
+deployment, add `version: 1` manually. A future version is rejected instead of being guessed.
+The `-check-config` command performs the same strict load, prints redacted effective JSON and exits
+without starting the GUI or server.
 
 For a LAN deployment, enable the Phase 2 transition authentication before allowing other
 devices to connect:
@@ -68,12 +75,18 @@ Do not create a Public profile rule and do not port-forward this service from th
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
   -Headers @{ Authorization = "Bearer replace-with-a-long-random-token" }
+Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/config
 ```
 
 Health is intentionally unauthenticated for local diagnostics. When authentication is
 enabled, add the same `Authorization: Bearer <token>` header to clipboard and capabilities
 requests, including the iPhone Shortcut. Every response includes `X-Request-ID`; preserve it
 when reporting a failure.
+
+The effective-configuration response is redacted: credentials are represented only by configured
+booleans and the source file path is omitted. With authentication disabled, loopback may read it
+without a token and remote access is rejected. With authentication enabled, all requests require
+the management token specifically; peer tokens are rejected.
 
 File management endpoints under `/api/v1/files/` have an additional boundary: with
 `security.auth_enabled: false`, they accept only loopback requests and reject LAN clients with

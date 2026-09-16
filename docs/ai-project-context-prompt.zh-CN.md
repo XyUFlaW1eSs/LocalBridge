@@ -25,7 +25,8 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 - Phase 2.1 已增加可选 Bearer 认证、请求 ID 和能力发现。
 - Phase 2.2 已增加显式配对接口和持久化对端注册表；Phase 2.3 已增加可选 UDP 发现，结果只是临时且不可信的可达性列表；
   Phase 2.4 已让启用认证时的受保护 API 接受已配对 peer Token；Phase 2.5 已增加对端健康探测和本地剪贴板尽力而为出站。
-  Phase 2.6 已修复 Token 持久化，并增加过期、有界重叠轮换和旧注册表迁移。Phase 3.1 已增加通用 Envelope、持久化 Job
+  Phase 2.6 已修复 Token 持久化，并增加过期、有界重叠轮换和旧注册表迁移。Phase 2.7 已增加配置 Schema v1、
+  非破坏性旧配置迁移和脱敏生效配置诊断。Phase 3.1 已增加通用 Envelope、持久化 Job
   存储和只读查询；重试、离线重放、富内容、TLS 和公共客户端生态尚未实现。Phase 4.1 与 4.2A–4.2D 已交付可续传文件
   分享/接收、三分区 GUI、接收确认、Windows 外壳/托盘集成和 WebView2 宿主；URL/图片模块仍待实现。
 - 当前 Windows 到 iPhone 是 Pull 流程：Windows 更新内存中的 latest，iPhone 必须 GET。已配对 LocalBridge 桌面主机支持尽力而为的剪贴板出站，
@@ -34,6 +35,7 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 ## 当前 HTTP 契约
 
 - `GET /api/v1/system/health`
+- `GET /api/v1/system/config`：返回脱敏生效配置；关闭认证时仅回环可访问，启用时仅管理 Token 可访问，peer Token 不可访问。
 - `POST /api/v1/clipboard`：接受包含 `content`、兼容别名 `text`、可选 `type`、`mime_type`、`device_id`、`id`、`hash` 的 JSON 对象；
   也接受原始 UTF-8 `text/plain`。返回 `{accepted, item}`。
 - `GET /api/v1/clipboard/latest`：直接返回最新项目；为空时返回 404。
@@ -66,9 +68,9 @@ LocalBridge 是一个本地优先、模块化、可插拔的局域网跨设备�
 
 ## 后续开发方向
 
-1. Phase 2 / v0.2.x：配置加固、受保护的凭据存储/配置、TLS、诊断、共享重试/超时、持久化边界和 Windows 服务设计。
+1. Phase 2 / v0.2.x：受保护的凭据存储/配置、TLS、更丰富的诊断、共享重试/超时、持久化边界和 Windows 服务设计。
    请求 ID、能力、过渡认证、显式配对、对端注册表、不可信 UDP 发现提示、peer Token 认证、对端健康、尽力而为出站和
-   会过期的 Token 轮换已部分交付。
+   会过期的 Token 轮换和版本化脱敏配置诊断已部分交付。
 2. Phase 3 / v0.3.x：重试/离线策略、回执、冲突/幂等规则、历史、富剪贴板、图片、HTML/RTF 和截图；Envelope/Job 状态已部分交付。
 3. Phase 4 / v0.4.x：支持恢复和完整性校验的文件传输、二维码/HTTP 移动端下载/上传页面、Windows 文件分享/接受记录/设置 GUI，
    以及 URL 推送、图片投递、通知、截图和组合上下文任务。

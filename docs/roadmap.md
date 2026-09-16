@@ -20,7 +20,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | Release | Phase | Status | Result |
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
-| `v0.2.x` | Phase 2 | In progress | Sprints 2.1–2.6 delivered through peer-token lifecycle; secure transport and production hardening remain |
+| `v0.2.x` | Phase 2 | In progress | Sprints 2.1–2.7 delivered through versioned config diagnostics; secure transport and production hardening remain |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
 | `v0.4.x` | Phase 4 | In progress | Sprint 4.2A–4.2D GUI, Windows shell, receive approval and native host are delivered; URL/image work remains |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
@@ -63,13 +63,14 @@ is complete until its acceptance criteria and release gate pass.
 - Device ID, SHA-256 deduplication and feedback-loop suppression.
 - Runtime diagnostics, tests and a runnable `v0.1.0` package.
 
-### Phase 2 — Platform hardening, trust and discovery (in progress; Sprints 2.1–2.6 delivered)
+### Phase 2 — Platform hardening, trust and discovery (in progress; Sprints 2.1–2.7 delivered)
 
 Goal: make the platform safe and diagnosable before adding more payload types.
 
 Planned work:
 
-- Versioned configuration schema, defaults, migration rules and redacted config diagnostics.
+- Sprint 2.7 now provides schema v1, versioned defaults, legacy migration rules and redacted
+  effective-configuration diagnostics.
 - Stable error envelope, request IDs, API capability endpoint and compatibility tests.
 - Device identity, pairing flow, token storage, allow-list, revoke/reset and safe first-run UX.
 - Sprint 2.2 now provides an explicit pairing-code flow, persisted peer registry and revoke/list APIs;
@@ -84,6 +85,8 @@ Planned work:
 - Sprint 2.6 fixes credential persistence, adds expiry and bounded-overlap rotation, provides a
   target-scoped rotation endpoint, and migrates affected legacy peers to `repair_required`;
   protected-at-rest credentials and user-facing provisioning remain pending.
+- Sprint 2.7 defines configuration schema v1, migrates legacy v0 in memory, rejects unknown/future
+  input and exposes management-only redacted effective configuration diagnostics.
 - LAN discovery through mDNS or UDP broadcast, plus manual IP/port fallback.
 - Peer registry with online/last-seen/capability state and network-change recovery.
 - TLS or an equivalent authenticated local channel; no silent downgrade on paired links.

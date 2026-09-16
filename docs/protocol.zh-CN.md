@@ -39,6 +39,38 @@ Phase 1 只传输 UTF-8 文本。JSON 请求和响应使用 UTF-8，时间使用
 
 能力名称是不可枚举的字符串。客户端必须容忍未知能力，并且在使用某项能力前不能假设它一定存在。
 
+## 生效配置诊断
+
+`GET /api/v1/system/config`
+
+这个只读管理诊断返回应用默认值和内存迁移后的配置：
+
+```json
+{
+  "schema_version": 1,
+  "source_schema_version": 0,
+  "migrated": true,
+  "source": "file",
+  "effective": {
+    "server": {"host": "0.0.0.0", "port": 8899, "read_timeout": "5s"},
+    "security": {
+      "auth_enabled": true,
+      "bearer_token_configured": true,
+      "pairing_code_configured": true,
+      "peer_token_ttl": "720h0m0s",
+      "token_overlap_ttl": "10m0s"
+    }
+  }
+}
+```
+
+实际响应包含所有非敏感的生效 section，但绝不包含 Bearer Token、配对码或配置文件路径。未启用管理认证时，仅本机回环
+可以访问；启用认证后，包括回环在内的所有请求都必须使用管理 Bearer Token，peer Token 返回 `403`。能力名称为
+`system.config.read`。
+
+当前根配置 Schema 为 `version: 1`。缺少版本或显式版本 0 的配置只在内存迁移到版本 1，不会改写文件。负版本、未来版本、
+未知 JSON 字段和未知 YAML 根键/section 都会被拒绝。
+
 ## 推送剪贴板
 
 `POST /api/v1/clipboard`

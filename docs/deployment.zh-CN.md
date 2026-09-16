@@ -17,10 +17,15 @@ go build -trimpath -ldflags "-s -w" -o .\dist\localbridge.exe .\cmd\localbridge
 ```powershell
 Copy-Item .\configs\config.example.yaml .\configs\config.yaml
 notepad .\configs\config.yaml
+.\dist\localbridge.exe -check-config -config .\configs\config.yaml
 ```
 
 设置稳定的 `device.id`。局域网使用时保持 `server.host` 为 `0.0.0.0`，并选择未被占用的端口。如果配置以后
 包含凭据，不要提交 `configs/config.yaml`。
+
+当前根 Schema 为 `version: 1`。没有版本的旧文件视为版本 0，只在内存迁移，服务不会改写它。验证旧部署后请手动增加
+`version: 1`。未来版本会被拒绝，而不会被猜测性解析。`-check-config` 会执行同样的严格加载，输出脱敏的生效 JSON 后退出，
+不会启动 GUI 或 HTTP Server。
 
 在允许其他设备连接前，建议启用 Phase 2 的过渡认证：
 
@@ -61,10 +66,14 @@ New-NetFirewallRule -DisplayName "LocalBridge (Private LAN)" `
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
   -Headers @{ Authorization = "Bearer replace-with-a-long-random-token" }
+Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/config
 ```
 
 健康检查有意保持免认证，以便本地诊断。启用认证后，剪贴板和能力请求（包括 iPhone 快捷指令）都必须添加同一个
 `Authorization: Bearer <token>` Header。每个响应都会包含 `X-Request-ID`；报告故障时请保留该值。
+
+生效配置响应已经脱敏：凭据只显示是否已配置，不返回配置文件路径。关闭认证时本机回环可直接读取、远程访问被拒绝；
+启用认证后所有请求都必须使用管理 Token，peer Token 会被拒绝。
 
 `/api/v1/files/` 下的文件管理接口还有额外边界：当 `security.auth_enabled: false` 时，只接受回环请求，来自局域网
 的管理请求返回 `403`；启用认证后，管理操作必须使用 Bearer Token 或已配对的 peer Token。`/share/<token>` 和

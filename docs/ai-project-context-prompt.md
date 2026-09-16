@@ -31,7 +31,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
   optional UDP discovery as an ephemeral, untrusted reachability list. Phase 2.4 lets paired
   peer tokens authenticate protected APIs when auth is enabled. Phase 2.5 added peer health
   probes and best-effort local clipboard forwarding. Phase 2.6 fixed token persistence and added
-  expiry, bounded-overlap rotation and legacy migration. Phase 3.1 added the generic Envelope,
+  expiry, bounded-overlap rotation and legacy migration. Phase 2.7 added configuration schema v1,
+  non-destructive legacy migration and redacted effective-config diagnostics. Phase 3.1 added the generic Envelope,
   durable Job store and read-only job inspection; retries, offline replay, rich content, TLS
   and a public-client ecosystem are not implemented yet. Phase 4.1 and 4.2A–4.2D delivered
   resumable file sharing/receiving, the three-section GUI, receive approval, Windows shell/tray
@@ -43,6 +44,8 @@ actions between trusted devices without requiring a cloud account or vendor rela
 ## Current HTTP contract
 
 - `GET /api/v1/system/health`
+- `GET /api/v1/system/config`: returns redacted effective configuration; it is loopback-only when
+  auth is disabled and management-token-only when enabled. Peer tokens cannot access it.
 - `POST /api/v1/clipboard`: accepts a JSON object with `content`, compatibility alias `text`,
   optional `type`, `mime_type`, `device_id`, `id` and `hash`; it also accepts raw UTF-8
   `text/plain`. It returns `{accepted, item}`.
@@ -85,12 +88,11 @@ actions between trusted devices without requiring a cloud account or vendor rela
 
 ## Direction of future work
 
-1. Phase 2 / v0.2.x: configuration hardening, protected credential storage/provisioning, TLS,
-   diagnostics, shared
+1. Phase 2 / v0.2.x: protected credential storage/provisioning, TLS, richer diagnostics, shared
    retries/timeouts, persistence boundary and Windows service/tray design. Request IDs,
    capabilities, transition auth, explicit pairing, peer registry, peer-token authentication,
-   peer health, best-effort outbound clipboard and expiring token rotation are already partially
-   delivered; UDP discovery is implemented only as an untrusted hint.
+   peer health, best-effort outbound clipboard, expiring token rotation and versioned redacted
+   configuration diagnostics are already partially delivered; UDP discovery is implemented only as an untrusted hint.
 2. Phase 3 / v0.3.x: retry/offline policy, receipts, conflict/idempotency rules, history, rich
    clipboard, images, HTML/RTF and screenshots. Envelope/job state is partially delivered.
 3. Phase 4 / v0.4.x: resumable/integrity-checked file transfer, QR/HTTP mobile download/upload

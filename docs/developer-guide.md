@@ -91,6 +91,14 @@ Reviewers should ask:
 - Are failure paths observable without logging payload bodies?
 - Is the smallest runnable package and both language docs updated?
 
+### Configuration evolution
+
+Configuration changes must preserve the root schema contract. Additive fields with defaults may
+remain in the current version when old files retain their meaning. A semantic or breaking change
+requires a new schema version, an explicit in-memory migration, rollback notes and tests for every
+supported source version. Never silently accept a future version or emit secrets through effective-
+configuration diagnostics.
+
 ## Release process
 
 Before tagging a release, update the roadmap status, changelog, configuration examples,
