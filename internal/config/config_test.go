@@ -178,3 +178,42 @@ func TestRejectsPeerTokenOverlapAtOrBeyondTTL(t *testing.T) {
 		t.Fatal("token overlap equal to token TTL was accepted")
 	}
 }
+
+func TestTLSConfigurationRequiresCompletePair(t *testing.T) {
+	cfg := Default()
+	cfg.Server.TLSEnabled = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("TLS without certificate and key was accepted")
+	}
+	cfg.Server.TLSCertFile = "cert.pem"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("TLS without private key was accepted")
+	}
+	cfg.Server.TLSKeyFile = "key.pem"
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Server.TLSEnabled = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("TLS file paths were accepted while TLS was disabled")
+	}
+}
+
+func TestTLSConfigurationYAMLAndDiagnostics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := []byte("version: 1\nserver:\n  tls_enabled: true\n  tls_cert_file: cert.pem\n  tls_key_file: key.pem\n")
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(cfg.Diagnostics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"tls_enabled":true`) || !strings.Contains(string(data), `"tls_cert_configured":true`) || strings.Contains(string(data), "cert.pem") {
+		t.Fatalf("TLS diagnostics are incorrect or leaked a path: %s", data)
+	}
+}

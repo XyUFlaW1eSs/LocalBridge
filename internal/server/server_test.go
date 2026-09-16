@@ -1,7 +1,10 @@
 package server
 
 import (
+	"crypto/sha256"
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -40,6 +43,28 @@ func TestCapabilitiesEndpoint(t *testing.T) {
 	}
 	if body.Version != "test" || body.Device.ID != "test-pc" || len(body.Capabilities) != 1 {
 		t.Fatalf("unexpected capabilities body: %s", recorder.Body.String())
+	}
+}
+
+func TestHTTPSCapabilitiesAdvertisePinnedLeaf(t *testing.T) {
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer tlsServer.Close()
+	digest := sha256.Sum256(tlsServer.TLS.Certificates[0].Certificate[0])
+	s := NewWithTLS("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, TLSConfig{Enabled: true, Certificate: tlsServer.TLS.Certificates[0], Fingerprint: fmt.Sprintf("%x", digest)})
+	recorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))
+	var body struct {
+		Scheme            string `json:"scheme"`
+		CertificateSHA256 string `json:"certificate_sha256"`
+		Transport         struct {
+			Scheme string `json:"scheme"`
+		} `json:"transport"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Scheme != "https" || body.Transport.Scheme != "https" || body.CertificateSHA256 != fmt.Sprintf("%x", digest) || s.http.TLSConfig.MinVersion != tls.VersionTLS12 || s.http.TLSConfig.MaxVersion != tls.VersionTLS13 {
+		t.Fatalf("HTTPS capability or TLS policy is incorrect: %s", recorder.Body.String())
 	}
 }
 

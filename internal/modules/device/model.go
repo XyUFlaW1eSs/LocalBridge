@@ -9,6 +9,9 @@ type Peer struct {
 	Port                   int       `json:"port,omitempty"`
 	Capabilities           []string  `json:"capabilities,omitempty"`
 	Status                 string    `json:"status"`
+	Secure                 bool      `json:"secure"`
+	Scheme                 string    `json:"scheme"`
+	CertificateSHA256      string    `json:"certificate_sha256,omitempty"`
 	PairedAt               time.Time `json:"paired_at"`
 	LastSeen               time.Time `json:"last_seen"`
 	Token                  string    `json:"-"`
@@ -19,35 +22,44 @@ type Peer struct {
 }
 
 type DiscoveredPeer struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Address      string    `json:"address"`
-	Port         int       `json:"port"`
-	Capabilities []string  `json:"capabilities,omitempty"`
-	Status       string    `json:"status"`
-	LastSeen     time.Time `json:"last_seen"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Address           string    `json:"address"`
+	Port              int       `json:"port"`
+	Capabilities      []string  `json:"capabilities,omitempty"`
+	Status            string    `json:"status"`
+	Secure            bool      `json:"secure"`
+	Scheme            string    `json:"scheme"`
+	CertificateSHA256 string    `json:"certificate_sha256,omitempty"`
+	LastSeen          time.Time `json:"last_seen"`
 }
 
 type pairRequest struct {
-	Code         string   `json:"code"`
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Address      string   `json:"address"`
-	Port         int      `json:"port"`
-	Capabilities []string `json:"capabilities"`
+	Code              string   `json:"code"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Address           string   `json:"address"`
+	Port              int      `json:"port"`
+	Capabilities      []string `json:"capabilities"`
+	Secure            bool     `json:"secure"`
+	Scheme            string   `json:"scheme"`
+	CertificateSHA256 string   `json:"certificate_sha256"`
 }
 
 type publicPeer struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	Address        string     `json:"address,omitempty"`
-	Port           int        `json:"port,omitempty"`
-	Capabilities   []string   `json:"capabilities,omitempty"`
-	Status         string     `json:"status"`
-	PairedAt       time.Time  `json:"paired_at"`
-	LastSeen       time.Time  `json:"last_seen"`
-	TokenIssuedAt  *time.Time `json:"token_issued_at,omitempty"`
-	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
+	ID                string     `json:"id"`
+	Name              string     `json:"name"`
+	Address           string     `json:"address,omitempty"`
+	Port              int        `json:"port,omitempty"`
+	Capabilities      []string   `json:"capabilities,omitempty"`
+	Status            string     `json:"status"`
+	Secure            bool       `json:"secure"`
+	Scheme            string     `json:"scheme"`
+	CertificateSHA256 string     `json:"certificate_sha256,omitempty"`
+	PairedAt          time.Time  `json:"paired_at"`
+	LastSeen          time.Time  `json:"last_seen"`
+	TokenIssuedAt     *time.Time `json:"token_issued_at,omitempty"`
+	TokenExpiresAt    *time.Time `json:"token_expires_at,omitempty"`
 }
 
 type persistedPeer struct {
@@ -57,6 +69,9 @@ type persistedPeer struct {
 	Port                   int       `json:"port,omitempty"`
 	Capabilities           []string  `json:"capabilities,omitempty"`
 	Status                 string    `json:"status"`
+	Secure                 bool      `json:"secure"`
+	Scheme                 string    `json:"scheme"`
+	CertificateSHA256      string    `json:"certificate_sha256,omitempty"`
 	PairedAt               time.Time `json:"paired_at"`
 	LastSeen               time.Time `json:"last_seen"`
 	Token                  string    `json:"token"`
@@ -72,11 +87,15 @@ type registryFile struct {
 }
 
 type discoveryAnnouncement struct {
-	Type            string   `json:"type"`
-	ProtocolVersion int      `json:"protocol_version"`
-	DeviceID        string   `json:"device_id"`
-	DeviceName      string   `json:"device_name"`
-	APIPort         int      `json:"api_port"`
-	Capabilities    []string `json:"capabilities,omitempty"`
-	Nonce           string   `json:"nonce"`
+	Type              string   `json:"type"`
+	ProtocolVersion   int      `json:"protocol_version"`
+	DeviceID          string   `json:"device_id"`
+	DeviceName        string   `json:"device_name"`
+	APIPort           int      `json:"api_port"`
+	Capabilities      []string `json:"capabilities,omitempty"`
+	Nonce             string   `json:"nonce"`
+	Secure            bool     `json:"secure"`
+	Scheme            string   `json:"scheme"`
+	CertificateSHA256 string   `json:"certificate_sha256,omitempty"`
+	Fingerprint       string   `json:"fingerprint,omitempty"`
 }

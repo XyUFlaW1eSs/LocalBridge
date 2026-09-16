@@ -17,6 +17,8 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/app"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/native"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/version"
 )
 
@@ -58,12 +60,12 @@ func main() {
 			slog.Error("invalid share selection", "error", err)
 			os.Exit(2)
 		}
-		if reached, apiErr := shareViaRunningService(cfg.Server.Port, paths); reached {
+		if reached, apiErr := shareViaRunningService(cfg, paths); reached {
 			if apiErr != nil {
 				slog.Error("failed to share files through running LocalBridge", "error", apiErr)
 				os.Exit(1)
 			}
-			_ = native.OpenURL(fmt.Sprintf("http://127.0.0.1:%d/app/#shares", cfg.Server.Port))
+			_ = native.OpenURL(fmt.Sprintf("%s://127.0.0.1:%d/app/#shares", serverScheme(cfg), cfg.Server.Port))
 			return
 		}
 	}
@@ -104,7 +106,7 @@ func main() {
 	runtime.Logger().Info("LocalBridge stopped")
 }
 
-func shareViaRunningService(port int, paths []string) (bool, error) {
+func shareViaRunningService(cfg config.Config, paths []string) (bool, error) {
 	files := make([]map[string]string, 0, len(paths))
 	for _, path := range paths {
 		files = append(files, map[string]string{"path": path})
@@ -113,13 +115,25 @@ func shareViaRunningService(port int, paths []string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	request, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/api/v1/files/shares", port), bytes.NewReader(body))
+	endpoint := transport.Endpoint{Address: "127.0.0.1", Port: cfg.Server.Port, Secure: cfg.Server.TLSEnabled}
+	if cfg.Server.TLSEnabled {
+		tlsConfig, err := server.LoadTLSCertificate(cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile)
+		if err != nil {
+			return false, nil
+		}
+		endpoint.CertificateSHA256 = tlsConfig.Fingerprint
+	}
+	client, err := transport.NewClient(2 * time.Second).HTTPClient(endpoint)
+	if err != nil {
+		return false, nil
+	}
+	request, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s://127.0.0.1:%d/api/v1/files/shares", serverScheme(cfg), cfg.Server.Port), bytes.NewReader(body))
 	if err != nil {
 		return false, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", fmt.Sprintf("explorer-%d-%d", os.Getpid(), time.Now().UnixNano()))
-	response, err := (&http.Client{Timeout: 2 * time.Second}).Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return false, nil
 	}
@@ -129,4 +143,11 @@ func shareViaRunningService(port int, paths []string) (bool, error) {
 		return true, fmt.Errorf("service returned %s: %s", response.Status, bytes.TrimSpace(message))
 	}
 	return true, nil
+}
+
+func serverScheme(cfg config.Config) string {
+	if cfg.Server.TLSEnabled {
+		return "https"
+	}
+	return "http"
 }

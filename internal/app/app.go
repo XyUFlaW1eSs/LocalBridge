@@ -49,6 +49,14 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	var tlsConfig server.TLSConfig
+	if cfg.Server.TLSEnabled {
+		var err error
+		tlsConfig, err = server.LoadTLSCertificate(cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("initialize TLS: %w", err)
+		}
+	}
 	log := logger.New(cfg.Logging.Level, cfg.Logging.Format, nil)
 	bus := eventbus.New()
 	manager := module.NewManager()
@@ -73,6 +81,11 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if cfg.Files.Enabled {
 		capabilities = append(capabilities, "files.share", "files.download", "files.receive", "files.resume")
 	}
+	if cfg.Server.TLSEnabled {
+		capabilities = append(capabilities, "transport.https")
+	} else {
+		capabilities = append(capabilities, "transport.http")
+	}
 	settings, err := settingsModule.New(cfg.Settings, log)
 	if err != nil {
 		return nil, err
@@ -95,6 +108,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	devices.SetLocalTransport(cfg.Server.TLSEnabled, tlsConfig.Fingerprint)
 	if err := manager.Register(devices); err != nil {
 		return nil, err
 	}
@@ -106,7 +120,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	exitRequests := make(chan struct{})
 	var exitOnce sync.Once
 	nativeModule, err := native.New(native.Config{
-		GUIURL:     fmt.Sprintf("http://127.0.0.1:%d/app/", cfg.Server.Port),
+		GUIURL:     fmt.Sprintf("%s://127.0.0.1:%d/app/", serverScheme(cfg), cfg.Server.Port),
 		Executable: options.Executable,
 		ConfigPath: options.ConfigPath,
 		Settings:   settings.Store(),
@@ -121,16 +135,23 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if err := manager.Register(nativeModule); err != nil {
 		return nil, err
 	}
-	srv := server.New(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, func(mux *http.ServeMux) {
+	srv := server.NewWithTLS(cfg.Server.Address(), cfg.Server.ReadTimeout, cfg.Server.WriteTimeout, cfg.Server.IdleTimeout, log, func(mux *http.ServeMux) {
 		manager.Routes(mux)
 		web.Routes(mux)
-	})
+	}, tlsConfig)
 	srv.SetAuthToken(authToken(cfg))
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetPublicPathPrefixes("/share/", "/receive/")
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
 	srv.SetRuntimeConfig(cfg.Diagnostics())
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv, files: files, native: nativeModule, exit: exitRequests}, nil
+}
+
+func serverScheme(cfg config.Config) string {
+	if cfg.Server.TLSEnabled {
+		return "https"
+	}
+	return "http"
 }
 
 func authToken(cfg config.Config) string {

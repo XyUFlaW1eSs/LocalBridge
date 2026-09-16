@@ -191,8 +191,27 @@ func TestRegistryV1MigratesMissingTokensToRepairRequired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"version": 2`) {
+	if !strings.Contains(string(data), `"version": 3`) || !strings.Contains(string(data), `"scheme": "http"`) {
 		t.Fatalf("legacy registry was not migrated: %s", data)
+	}
+}
+
+func TestRegistryV2MigratesPeersToExplicitLegacyHTTP(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	legacy := `{"version":2,"peers":[{"id":"legacy-v2","name":"Legacy","status":"paired","token":"token","token_issued_at":"2026-01-01T00:00:00Z","token_expires_at":"2027-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, `"version": 3`) || !strings.Contains(text, `"secure": false`) || !strings.Contains(text, `"scheme": "http"`) {
+		t.Fatalf("v2 registry did not migrate as legacy HTTP: %s", text)
 	}
 }
 
@@ -231,6 +250,27 @@ func TestParseDiscoveryAnnouncement(t *testing.T) {
 	}
 	if _, ok := parseDiscoveryAnnouncement([]byte(`{"type":"other","protocol_version":1,"device_id":"phone","nonce":"abc"}`)); ok {
 		t.Fatal("unexpectedly accepted invalid announcement type")
+	}
+	fingerprint := strings.Repeat("a", 64)
+	secure, ok := parseDiscoveryAnnouncement([]byte(fmt.Sprintf(`{"type":"localbridge.discovery.v1","protocol_version":1,"device_id":"secure-phone","api_port":8899,"scheme":"https","secure":true,"certificate_sha256":%q,"nonce":"abc"}`, fingerprint)))
+	if !ok || !secure.Secure || secure.Scheme != "https" || secure.CertificateSHA256 != fingerprint {
+		t.Fatalf("secure discovery fields were not retained: %#v", secure)
+	}
+	if _, ok := parseDiscoveryAnnouncement([]byte(`{"type":"localbridge.discovery.v1","protocol_version":1,"device_id":"bad","api_port":8899,"scheme":"https","secure":true,"nonce":"abc"}`)); ok {
+		t.Fatal("secure discovery without a fingerprint was accepted")
+	}
+}
+
+func TestPairRequiresPinnedFingerprintForSecurePeer(t *testing.T) {
+	if err := validatePairRequest(pairRequest{ID: "phone", Secure: true, Scheme: "https"}, "windows-pc"); err == nil {
+		t.Fatal("secure pairing without a fingerprint was accepted")
+	}
+	fingerprint := strings.Repeat("b", 64)
+	if err := validatePairRequest(pairRequest{ID: "phone", Secure: true, Scheme: "https", CertificateSHA256: fingerprint}, "windows-pc"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePairRequest(pairRequest{ID: "phone", Secure: false, Scheme: "https", CertificateSHA256: fingerprint}, "windows-pc"); err == nil {
+		t.Fatal("insecure HTTPS pairing was accepted")
 	}
 }
 

@@ -3,13 +3,17 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -22,6 +26,39 @@ type Server struct {
 	publicPathPrefixes []string
 	runtimeInfo        RuntimeInfo
 	runtimeConfig      any
+	tlsEnabled         bool
+	tlsFingerprint     string
+}
+
+type TLSConfig struct {
+	Enabled     bool
+	Certificate tls.Certificate
+	Fingerprint string
+}
+
+// LoadTLSCertificate loads and validates the configured certificate/key pair.
+// The fingerprint is the lowercase SHA-256 of the leaf certificate DER.
+func LoadTLSCertificate(certFile, keyFile string) (TLSConfig, error) {
+	certFile = strings.TrimSpace(certFile)
+	keyFile = strings.TrimSpace(keyFile)
+	if certFile == "" || keyFile == "" {
+		return TLSConfig{}, errors.New("TLS certificate and private key are both required")
+	}
+	if _, err := os.Stat(certFile); err != nil {
+		return TLSConfig{}, fmt.Errorf("TLS certificate file: %w", err)
+	}
+	if _, err := os.Stat(keyFile); err != nil {
+		return TLSConfig{}, fmt.Errorf("TLS private key file: %w", err)
+	}
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return TLSConfig{}, fmt.Errorf("load TLS certificate and private key: %w", err)
+	}
+	if len(certificate.Certificate) == 0 {
+		return TLSConfig{}, errors.New("TLS certificate chain is empty")
+	}
+	digest := sha256.Sum256(certificate.Certificate[0])
+	return TLSConfig{Enabled: true, Certificate: certificate, Fingerprint: hex.EncodeToString(digest[:])}, nil
 }
 
 type RuntimeInfo struct {
@@ -32,10 +69,14 @@ type RuntimeInfo struct {
 }
 
 func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, logger *slog.Logger, routes func(*http.ServeMux)) *Server {
+	return NewWithTLS(address, readTimeout, writeTimeout, idleTimeout, logger, routes, TLSConfig{})
+}
+
+func NewWithTLS(address string, readTimeout, writeTimeout, idleTimeout time.Duration, logger *slog.Logger, routes func(*http.ServeMux), tlsConfig TLSConfig) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Server{logger: logger, runtimeInfo: RuntimeInfo{Version: "dev"}}
+	s := &Server{logger: logger, runtimeInfo: RuntimeInfo{Version: "dev"}, tlsEnabled: tlsConfig.Enabled, tlsFingerprint: tlsConfig.Fingerprint}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/system/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "localbridge", "time": time.Now().UTC(), "request_id": requestIDFrom(r)})
@@ -53,7 +94,15 @@ func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, l
 				"id":   info.DeviceID,
 				"name": info.DeviceName,
 			},
-			"capabilities": capabilities,
+			"transport": map[string]string{
+				"scheme":             s.Scheme(),
+				"certificate_sha256": s.CertificateFingerprint(),
+				"fingerprint":        s.CertificateFingerprint(),
+			},
+			"scheme":             s.Scheme(),
+			"certificate_sha256": s.CertificateFingerprint(),
+			"fingerprint":        s.CertificateFingerprint(),
+			"capabilities":       capabilities,
 		})
 	})
 	mux.HandleFunc("GET /api/v1/system/config", func(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +120,26 @@ func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, l
 		routes(mux)
 	}
 	handler := requestIDMiddleware(requestLogging(logger, authentication(s, mux)))
-	s.http = &http.Server{Addr: address, Handler: handler, ReadTimeout: readTimeout, WriteTimeout: writeTimeout, IdleTimeout: idleTimeout}
+	serverConfig := &http.Server{Addr: address, Handler: handler, ReadTimeout: readTimeout, WriteTimeout: writeTimeout, IdleTimeout: idleTimeout}
+	if tlsConfig.Enabled {
+		serverConfig.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{tlsConfig.Certificate}}
+	}
+	s.http = serverConfig
 	return s
+}
+
+func (s *Server) Scheme() string {
+	if s != nil && s.tlsEnabled {
+		return "https"
+	}
+	return "http"
+}
+
+func (s *Server) CertificateFingerprint() string {
+	if s == nil || !s.tlsEnabled {
+		return ""
+	}
+	return s.tlsFingerprint
 }
 
 func (s *Server) SetAuthToken(token string) { s.authToken = strings.TrimSpace(token) }
@@ -91,8 +158,13 @@ func (s *Server) SetRuntimeInfo(info RuntimeInfo) { s.runtimeInfo = info }
 func (s *Server) SetRuntimeConfig(value any) { s.runtimeConfig = value }
 
 func (s *Server) Start() error {
-	s.logger.Info("HTTP server started", "address", s.http.Addr)
-	err := s.http.ListenAndServe()
+	s.logger.Info("API server started", "address", s.http.Addr, "scheme", s.Scheme(), "certificate_sha256", s.CertificateFingerprint())
+	var err error
+	if s.tlsEnabled {
+		err = s.http.ListenAndServeTLS("", "")
+	} else {
+		err = s.http.ListenAndServe()
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

@@ -26,7 +26,7 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 )
 
-const registryVersion = 2
+const registryVersion = 3
 const maxRegistryBytes = 1024 * 1024
 const maxPeers = 1024
 
@@ -36,15 +36,18 @@ const (
 )
 
 type Module struct {
-	cfg          config.DeviceConfig
-	security     config.SecurityConfig
-	discovery    config.DiscoveryConfig
-	apiPort      int
-	capabilities []string
-	logger       *slog.Logger
-	bus          *eventbus.Bus
-	store        *syncstore.Store
-	transport    *transport.Client
+	cfg              config.DeviceConfig
+	security         config.SecurityConfig
+	discovery        config.DiscoveryConfig
+	apiPort          int
+	capabilities     []string
+	logger           *slog.Logger
+	bus              *eventbus.Bus
+	store            *syncstore.Store
+	transport        *transport.Client
+	localSecure      bool
+	localScheme      string
+	localFingerprint string
 
 	mu              sync.RWMutex
 	peers           map[string]Peer
@@ -71,10 +74,24 @@ func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery conf
 		return nil, errors.New("invalid peer token lifetime configuration")
 	}
 	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer), now: func() time.Time { return time.Now().UTC() }}
+	m.localScheme = "http"
 	if err := m.load(); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// SetLocalTransport supplies the listener's advertised transport identity.
+// Discovery is only a hint; this information never grants peer trust.
+func (m *Module) SetLocalTransport(secure bool, fingerprint string) {
+	m.localSecure = secure
+	m.localFingerprint = strings.TrimSpace(fingerprint)
+	if secure {
+		m.localScheme = "https"
+	} else {
+		m.localScheme = "http"
+		m.localFingerprint = ""
+	}
 }
 
 func (m *Module) Name() string { return "device" }
@@ -177,7 +194,7 @@ func (m *Module) probePeers(ctx context.Context) {
 		var response struct {
 			Capabilities []string `json:"capabilities"`
 		}
-		err := m.transport.GetJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/system/capabilities", &response)
+		err := m.transport.GetJSON(ctx, peerEndpoint(peer), "/api/v1/system/capabilities", &response)
 		if err != nil {
 			m.setPeerHealth(peer.ID, "offline", nil)
 			m.logger.Debug("peer health check failed", "device_id", peer.ID, "address", peer.Address, "error", err)
@@ -287,7 +304,7 @@ func (m *Module) forwardClipboardEvent(ctx context.Context, data any) {
 		var response struct {
 			Accepted bool `json:"accepted"`
 		}
-		err = m.transport.PostJSON(ctx, transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token}, "/api/v1/clipboard", request, &response)
+		err = m.transport.PostJSON(ctx, peerEndpoint(peer), "/api/v1/clipboard", request, &response)
 		if err != nil {
 			if tracked {
 				_, _ = m.store.Update(job.ID, syncstore.StateFailed, err.Error())
@@ -314,6 +331,10 @@ func supports(capabilities []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func peerEndpoint(peer Peer) transport.Endpoint {
+	return transport.Endpoint{Address: peer.Address, Port: peer.Port, Token: peer.Token, Secure: peer.Secure, Scheme: peer.Scheme, CertificateSHA256: peer.CertificateSHA256}
 }
 
 func (m *Module) Routes(mux *http.ServeMux) {
@@ -344,7 +365,7 @@ func (m *Module) handleList(w http.ResponseWriter, _ *http.Request) {
 	}
 	m.mu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"local": map[string]string{"id": m.cfg.ID, "name": m.cfg.Name},
+		"local": map[string]any{"id": m.cfg.ID, "name": m.cfg.Name, "secure": m.localSecure, "scheme": m.localScheme, "certificate_sha256": m.localFingerprint},
 		"peers": peers,
 	})
 }
@@ -387,7 +408,7 @@ func (m *Module) handlePair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := m.now()
-	peer := Peer{ID: strings.TrimSpace(req.ID), Name: strings.TrimSpace(req.Name), Address: strings.TrimSpace(req.Address), Port: req.Port, Capabilities: cleanCapabilities(req.Capabilities), Status: "paired", PairedAt: now, LastSeen: now}
+	peer := Peer{ID: strings.TrimSpace(req.ID), Name: strings.TrimSpace(req.Name), Address: strings.TrimSpace(req.Address), Port: req.Port, Capabilities: cleanCapabilities(req.Capabilities), Status: "paired", Secure: req.Secure, Scheme: normalizedScheme(req.Scheme, req.Secure), CertificateSHA256: strings.TrimSpace(req.CertificateSHA256), PairedAt: now, LastSeen: now}
 	m.mu.Lock()
 	old, existed := m.peers[peer.ID]
 	if !existed && len(m.peers) >= maxPeers {
@@ -493,7 +514,7 @@ func (m *Module) startDiscovery(ctx context.Context) error {
 
 func (m *Module) announceLoop(ctx context.Context, conn *net.UDPConn) {
 	announce := func() {
-		packet := discoveryAnnouncement{Type: "localbridge.discovery.v1", ProtocolVersion: 1, DeviceID: m.cfg.ID, DeviceName: m.cfg.Name, APIPort: m.apiPort, Capabilities: append([]string(nil), m.capabilities...), Nonce: discoveryNonce()}
+		packet := discoveryAnnouncement{Type: "localbridge.discovery.v1", ProtocolVersion: 1, DeviceID: m.cfg.ID, DeviceName: m.cfg.Name, APIPort: m.apiPort, Capabilities: append([]string(nil), m.capabilities...), Nonce: discoveryNonce(), Secure: m.localSecure, Scheme: m.localScheme, CertificateSHA256: m.localFingerprint, Fingerprint: m.localFingerprint}
 		data, err := json.Marshal(packet)
 		if err != nil {
 			m.logger.Warn("device discovery announcement encode failed", "error", err)
@@ -545,7 +566,16 @@ func (m *Module) receiveAnnouncements(ctx context.Context, conn *net.UDPConn) {
 		if peerAddress == "" || announcement.APIPort < 1 || announcement.APIPort > 65535 {
 			continue
 		}
-		peer := DiscoveredPeer{ID: announcement.DeviceID, Name: announcement.DeviceName, Address: peerAddress, Port: announcement.APIPort, Capabilities: cleanCapabilities(announcement.Capabilities), Status: "discovered", LastSeen: time.Now().UTC()}
+		fingerprint := strings.TrimSpace(announcement.CertificateSHA256)
+		if fingerprint == "" {
+			fingerprint = strings.TrimSpace(announcement.Fingerprint)
+		}
+		secure := announcement.Secure || strings.EqualFold(strings.TrimSpace(announcement.Scheme), "https")
+		if !validCertificateFingerprint(fingerprint) {
+			fingerprint = ""
+			secure = false
+		}
+		peer := DiscoveredPeer{ID: announcement.DeviceID, Name: announcement.DeviceName, Address: peerAddress, Port: announcement.APIPort, Capabilities: cleanCapabilities(announcement.Capabilities), Status: "discovered", Secure: secure, Scheme: normalizedScheme(announcement.Scheme, secure), CertificateSHA256: fingerprint, LastSeen: time.Now().UTC()}
 		m.mu.Lock()
 		m.discovered[peer.ID] = peer
 		m.mu.Unlock()
@@ -562,6 +592,17 @@ func parseDiscoveryAnnouncement(data []byte) (discoveryAnnouncement, bool) {
 		return discoveryAnnouncement{}, false
 	}
 	if announcement.Type != "localbridge.discovery.v1" || announcement.ProtocolVersion != 1 || strings.TrimSpace(announcement.DeviceID) == "" || strings.TrimSpace(announcement.Nonce) == "" {
+		return discoveryAnnouncement{}, false
+	}
+	fingerprint := strings.TrimSpace(announcement.CertificateSHA256)
+	if fingerprint == "" {
+		fingerprint = strings.TrimSpace(announcement.Fingerprint)
+	}
+	if announcement.Secure || strings.EqualFold(strings.TrimSpace(announcement.Scheme), "https") {
+		if !announcement.Secure || strings.TrimSpace(announcement.Scheme) != "https" || !validCertificateFingerprint(fingerprint) {
+			return discoveryAnnouncement{}, false
+		}
+	} else if strings.TrimSpace(announcement.Scheme) != "" && strings.TrimSpace(announcement.Scheme) != "http" {
 		return discoveryAnnouncement{}, false
 	}
 	return announcement, true
@@ -588,7 +629,49 @@ func validatePairRequest(req pairRequest, localID string) error {
 	if req.Port < 0 || req.Port > 65535 {
 		return errors.New("device port must be between 0 and 65535")
 	}
+	if err := validatePeerTransport(req.Secure, req.Scheme, req.CertificateSHA256); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validatePeerTransport(secure bool, scheme, fingerprint string) error {
+	scheme = strings.ToLower(strings.TrimSpace(scheme))
+	fingerprint = strings.TrimSpace(fingerprint)
+	if secure {
+		if scheme != "https" {
+			return errors.New("secure peers must use the https scheme")
+		}
+		if !validCertificateFingerprint(fingerprint) {
+			return errors.New("secure peers require a lowercase 64-character SHA-256 certificate fingerprint")
+		}
+		return nil
+	}
+	if scheme == "" {
+		return nil
+	}
+	if scheme != "http" {
+		return errors.New("legacy peers must use the http scheme")
+	}
+	if fingerprint != "" {
+		return errors.New("HTTP peers must not include a certificate fingerprint")
+	}
+	return nil
+}
+
+func validCertificateFingerprint(value string) bool {
+	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func normalizedScheme(_ string, secure bool) string {
+	if secure {
+		return "https"
+	}
+	return "http"
 }
 
 func cleanCapabilities(values []string) []string {
@@ -615,7 +698,7 @@ func toPublic(peer Peer, now time.Time) publicPeer {
 	} else if !peer.TokenExpiresAt.After(now) {
 		status = "token_expired"
 	}
-	public := publicPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen}
+	public := publicPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: status, Secure: peer.Secure, Scheme: normalizedScheme(peer.Scheme, peer.Secure), CertificateSHA256: peer.CertificateSHA256, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen}
 	if !peer.TokenIssuedAt.IsZero() {
 		issuedAt := peer.TokenIssuedAt
 		public.TokenIssuedAt = &issuedAt
@@ -713,10 +796,15 @@ func (m *Module) load() error {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return fmt.Errorf("parse device registry: %w", err)
 	}
-	if state.Version != 1 && state.Version != registryVersion {
+	if state.Version != 1 && state.Version != 2 && state.Version != registryVersion {
 		return fmt.Errorf("unsupported device registry version: %d", state.Version)
 	}
 	for _, stored := range state.Peers {
+		if stored.Secure {
+			if err := validatePeerTransport(stored.Secure, stored.Scheme, stored.CertificateSHA256); err != nil {
+				return fmt.Errorf("invalid secure peer %q in device registry: %w", stored.ID, err)
+			}
+		}
 		peer := peerFromPersisted(stored)
 		if peer.ID == "" || peer.ID == m.cfg.ID {
 			continue
@@ -726,7 +814,13 @@ func (m *Module) load() error {
 		}
 		m.peers[peer.ID] = peer
 	}
-	if state.Version == 1 {
+	if state.Version < registryVersion {
+		for id, peer := range m.peers {
+			peer.Secure = false
+			peer.Scheme = "http"
+			peer.CertificateSHA256 = ""
+			m.peers[id] = peer
+		}
 		if err := m.saveLocked(); err != nil {
 			return fmt.Errorf("migrate device registry: %w", err)
 		}
@@ -784,11 +878,16 @@ func (m *Module) saveLocked() error {
 }
 
 func persistedFromPeer(peer Peer) persistedPeer {
-	return persistedPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+	return persistedPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: peer.Secure, Scheme: normalizedScheme(peer.Scheme, peer.Secure), CertificateSHA256: peer.CertificateSHA256, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
 }
 
 func peerFromPersisted(peer persistedPeer) Peer {
-	return Peer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+	secure := peer.Secure && peer.Scheme == "https" && validCertificateFingerprint(peer.CertificateSHA256)
+	fingerprint := ""
+	if secure {
+		fingerprint = peer.CertificateSHA256
+	}
+	return Peer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: secure, Scheme: normalizedScheme(peer.Scheme, secure), CertificateSHA256: fingerprint, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

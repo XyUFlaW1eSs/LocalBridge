@@ -46,6 +46,9 @@ type Diagnostics struct {
 type ServerConfig struct {
 	Host         string        `yaml:"host" json:"host"`
 	Port         int           `yaml:"port" json:"port"`
+	TLSEnabled   bool          `yaml:"tls_enabled" json:"tls_enabled"`
+	TLSCertFile  string        `yaml:"tls_cert_file" json:"tls_cert_file"`
+	TLSKeyFile   string        `yaml:"tls_key_file" json:"tls_key_file"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" json:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout" json:"write_timeout"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout" json:"idle_timeout"`
@@ -306,6 +309,16 @@ func setValue(cfg *Config, section, key, value string) error {
 			return fmt.Errorf("invalid server.port: %w", err)
 		}
 		cfg.Server.Port = v
+	case "server.tls_enabled":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid server.tls_enabled: %w", err)
+		}
+		cfg.Server.TLSEnabled = v
+	case "server.tls_cert_file":
+		cfg.Server.TLSCertFile = value
+	case "server.tls_key_file":
+		cfg.Server.TLSKeyFile = value
 	case "server.read_timeout":
 		v, err := time.ParseDuration(value)
 		if err != nil {
@@ -478,6 +491,13 @@ func (c Config) Validate() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("server.port must be between 1 and 65535: %d", c.Server.Port)
 	}
+	if c.Server.TLSEnabled {
+		if strings.TrimSpace(c.Server.TLSCertFile) == "" || strings.TrimSpace(c.Server.TLSKeyFile) == "" {
+			return errors.New("server.tls_cert_file and server.tls_key_file are required when TLS is enabled")
+		}
+	} else if strings.TrimSpace(c.Server.TLSCertFile) != "" || strings.TrimSpace(c.Server.TLSKeyFile) != "" {
+		return errors.New("server.tls_cert_file and server.tls_key_file must be empty when TLS is disabled")
+	}
 	if c.Device.ID == "" {
 		return errors.New("device.id must not be empty")
 	}
@@ -564,6 +584,8 @@ func (c Config) Diagnostics() Diagnostics {
 			"server": map[string]any{
 				"host": c.Server.Host, "port": c.Server.Port, "read_timeout": c.Server.ReadTimeout.String(),
 				"write_timeout": c.Server.WriteTimeout.String(), "idle_timeout": c.Server.IdleTimeout.String(),
+				"tls_enabled": c.Server.TLSEnabled, "tls_cert_configured": strings.TrimSpace(c.Server.TLSCertFile) != "",
+				"tls_key_configured": strings.TrimSpace(c.Server.TLSKeyFile) != "",
 			},
 			"device": map[string]any{
 				"id": c.Device.ID, "name": c.Device.Name, "registry_path": c.Device.RegistryPath,
