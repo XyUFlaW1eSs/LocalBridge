@@ -194,6 +194,8 @@ composition code, and permissions/upgrade behavior are explicit.
 - Performance budgets for clipboard latency, file throughput, memory and disk retention.
 - Crash recovery, offline queue recovery, observability and support bundle.
 - Full bilingual user/developer docs, example clients, conformance suite and release checklist.
+- Complete every mandatory gate in the [Security Threat Model](security-threat-model.md); open risks
+  there block release unless an approved ADR provides an equivalent control.
 
 ## High-value ideas beyond the original Phase 2/3 list
 

@@ -4,6 +4,7 @@
 
 ## [Unreleased]
 
+- 增加中英文安全威胁模型和强制 v1.0 安全发布门禁。
 - Phase 2 Sprint 2.1：增加请求 ID、能力发现和可选 Bearer Token 认证。
 - 增加安全配置、部署说明以及过渡安全边界的协议/ADR 文档。
 - Phase 2 Sprint 2.2：增加显式配对、peer Token 生成、持久化设备注册表以及撤销/列表接口。

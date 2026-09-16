@@ -100,6 +100,7 @@ go build ./cmd/localbridge
 - [剪贴板模块设计](docs/clipboard.zh-CN.md)
 - [部署手册](docs/deployment.zh-CN.md)
 - [开发指南](docs/developer-guide.zh-CN.md)
+- [安全威胁模型](docs/security-threat-model.zh-CN.md)
 - [编码风格](docs/coding-style.zh-CN.md)
 - [Sprint 1 交付](docs/sprints/sprint-1.zh-CN.md)
 - [Sprint 2.1 交付](docs/sprints/sprint-2.1.zh-CN.md)

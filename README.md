@@ -113,6 +113,7 @@ expose port 8899 or share URLs to the public internet.
 - [Clipboard module design](docs/clipboard.md)
 - [Deployment runbook](docs/deployment.md)
 - [Developer guide](docs/developer-guide.md)
+- [Security threat model](docs/security-threat-model.md)
 - [Coding style](docs/coding-style.md)
 - [Sprint 1 delivery](docs/sprints/sprint-1.md)
 - [Sprint 2.1 delivery](docs/sprints/sprint-2.1.md)
