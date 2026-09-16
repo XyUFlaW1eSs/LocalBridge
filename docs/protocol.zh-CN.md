@@ -251,7 +251,7 @@ multipart 元数据，字节写入 `files.share_dir` 下，完整多选批次创
 `GET /api/v1/settings` 读取、`PUT /api/v1/settings` 替换、`POST /api/v1/settings/reset` 恢复版本化的非敏感 GUI 设置。
 字段包括 `auto_start`、`minimize_to_tray`、`explorer_context_menu`、`auto_accept`、`notification_sound`、`send_sound` 和
 `receive_sound`。设置以 `0600` 权限原子写入。在 Windows 上，设置成功写入后会同步当前用户开机启动与 Explorer 注册表项；
-`auto_accept` 会立即控制等待确认流程，`minimize_to_tray` 在原生宿主窗口完成前仍不生效。`/app/` 来自 Go 内嵌静态资源，不依赖外部资源。
+`auto_accept` 会立即控制等待确认流程；`minimize_to_tray` 决定关闭 Windows WebView2 宿主时隐藏到托盘还是退出。`/app/` 来自 Go 内嵌静态资源，不依赖外部资源。
 
 Windows Explorer 动词使用 `localbridge.exe -share <file> [file...]`。参数必须解析为互不重复的普通非符号链接文件，一次选择创建
 一条分享批次。命令先尝试使用现有进程的回环管理 API，否则启动 LocalBridge。传输完成在进程内发布为 `file.sent` 或

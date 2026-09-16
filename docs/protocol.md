@@ -287,8 +287,8 @@ restores the versioned non-secret GUI settings document. Fields are `auto_start`
 `minimize_to_tray`, `explorer_context_menu`, `auto_accept`, `notification_sound`, `send_sound`
 and `receive_sound`. The store is atomically written with mode `0600`. On Windows, successful
 settings writes synchronize the current-user startup and Explorer keys. `auto_accept` controls the
-pending approval workflow immediately; `minimize_to_tray` remains inactive until a native hosted
-window exists. `/app/` is served
+pending approval workflow immediately; `minimize_to_tray` controls whether closing the Windows
+WebView2 host hides it to the tray or exits. `/app/` is served
 from Go-embedded static resources and has no external assets.
 
 The Windows Explorer verb launches `localbridge.exe -share <file> [file...]`. Arguments must resolve

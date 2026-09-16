@@ -72,7 +72,7 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是版本化、非敏感、以严格权限原子写入的文档。在 Windows 上，
 `auto_start` 与 `explorer_context_menu` 现会同步当前用户 HKCU 注册表；原生托盘提供分享、接收记录、设置与退出操作。文件完成事件
 可以产生托盘通知和声音。`auto_accept` 已生效：关闭时，新上传在“接受记录”等待允许或拒绝，等待期间不会接收文件字节。
-`minimize_to_tray` 仍需等待原生宿主窗口。二维码图片由 MIT
+Windows WebView2 宿主会执行 `minimize_to_tray`；运行时不可用时回退到系统浏览器，此时无法拦截浏览器关闭。二维码图片由 MIT
 许可的 `github.com/skip2/go-qrcode` 在本地生成，部署不需要 CDN 或公网二维码服务。
 
 需要持续查看日志时，请在 PowerShell 中运行：
@@ -91,8 +91,8 @@ GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是
 
 在 `/app/#settings` 中启用“开机自启”或“Explorer 右键菜单”会创建当前用户 HKCU 项，不需要管理员权限。Explorer 使用
 `localbridge.exe -share <files>` 调用程序，并尽可能复用正在运行的回环服务。托盘菜单可打开各 GUI 区域或请求优雅退出。
-程序必须运行在交互式用户会话，因为剪贴板和托盘属于该桌面。这不是 Windows Service，GUI 仍由浏览器承载；关闭浏览器暂时不会触发
-`minimize_to_tray`。
+程序必须运行在交互式用户会话，因为剪贴板和托盘属于该桌面。这不是 Windows Service。GUI 使用系统安装的 Microsoft Edge WebView2
+Runtime 和 MIT 许可的纯 Go `github.com/jchv/go-webview2` 宿主；按设置关闭原生窗口会隐藏到托盘，可从托盘恢复或正常退出。
 
 ## 回滚
 

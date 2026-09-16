@@ -93,9 +93,11 @@ The settings store notifies `internal/native` after a successful durable write. 
 adapter synchronizes only current-user registry keys; it never requires elevation. Explorer invokes
 the executable with `-share` and one or more file arguments. The command validates regular files,
 prefers the already-running loopback API, and otherwise starts the application and creates one
-multi-file share. File modules publish metadata-only `file.sent` and `file.received` events; the
-native adapter shows a tray notification and applies the configured sound policy. The embedded GUI
-is still browser-hosted, so native window close interception is not part of this slice.
+multi-file share. File modules publish metadata-only transfer events; the native adapter shows a
+tray notification and applies the configured sound policy. On Windows a pure-Go WebView2 host
+navigates only to the local GUI origin. Its window procedure converts close into hide when
+`minimize_to_tray` is enabled; tray actions restore the same window. Missing WebView2 falls back
+to the system browser.
 
 ## Extension rule
 

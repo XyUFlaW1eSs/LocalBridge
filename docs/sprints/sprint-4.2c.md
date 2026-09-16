@@ -4,7 +4,7 @@
 
 ## Status
 
-Delivered. The remaining Sprint 4.2 item is native hosted-window close-to-tray behavior.
+Delivered. The native hosted-window follow-up was delivered in Sprint 4.2D.
 
 ## Goal
 
@@ -34,4 +34,3 @@ expire under the configured upload TTL and survive process restarts through the 
 Automated tests cover pending creation, duplicate event suppression, pre-approval write rejection,
 remote unauthenticated approval rejection, local approval and completion, and explicit rejection.
 The full Go test/vet suite, frontend syntax check, Windows release build and Linux compile gate pass.
-

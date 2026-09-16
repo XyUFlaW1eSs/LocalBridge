@@ -7,8 +7,8 @@ module synchronizes text clipboard content between a Windows PC and an iPhone th
 iPhone Shortcuts. No cloud account or relay service is required.
 
 > Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1, Phase 4.1, the embedded
-> file GUI, the Sprint 4.2B Windows shell foundation and Sprint 4.2C receive approval are delivered. URL/image modules,
-> native hosted-window close-to-tray behavior and the remaining v1.0 roadmap are still in progress.
+> file GUI and Sprints 4.2B–4.2D Windows shell, receive approval and native hosted window are delivered.
+> URL/image modules and the remaining v1.0 roadmap are still in progress.
 
 ## What it does
 
@@ -34,8 +34,9 @@ receive history and persisted settings. The browser uploads multipart files into
 controlled `files.share_dir`; it never sends or displays a real local path. The share page has
 drag/drop and multi-select support, expandable file rows, URL copy and an offline-generated PNG
 QR code. Windows now has per-user startup and Explorer context-menu synchronization, a native tray,
-multi-file `-share` handling, and completion notifications. The GUI is still browser-hosted, so the
-`minimize_to_tray` setting is persisted but cannot yet intercept a browser window's close button.
+multi-file `-share` handling, completion notifications and a WebView2-hosted native window. Closing
+that window obeys `minimize_to_tray`; tray actions restore the same window. If WebView2 is unavailable,
+LocalBridge logs the failure and falls back to the system browser.
 When `auto_accept` is disabled, incoming file metadata waits in Receive History for an explicit
 approve/reject decision before any file bytes are accepted; the mobile page continues after approval.
 
@@ -125,6 +126,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 4.2A delivery](docs/sprints/sprint-4.2a.md)
 - [Sprint 4.2B Windows shell foundation](docs/sprints/sprint-4.2b.md)
 - [Sprint 4.2C receive approval](docs/sprints/sprint-4.2c.md)
+- [Sprint 4.2D native Windows host](docs/sprints/sprint-4.2d.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

@@ -4,7 +4,7 @@
 
 ## Status
 
-Foundation delivered. Native hosted-window close interception and receive approval remain open.
+Foundation delivered. Receive approval followed in Sprint 4.2C and the native host in Sprint 4.2D.
 
 ## Goal
 
@@ -48,8 +48,7 @@ effects without requiring administrator privileges or coupling feature modules t
 
 ## Known limitations and next slice
 
-The UI remains the embedded page opened in the user's browser. There is no WebView2/native hosted
-window yet, so a browser close button cannot be converted into “minimize to tray”; the setting is
-retained but inactive. The pending-receive/approval state machine was delivered in Sprint 4.2C.
-The next desktop slice must implement hosted-window behavior and perform an interactive Windows tray,
-registry and Explorer smoke test before claiming full Sprint 4.2 completion.
+This foundation originally opened the embedded page in the user's browser. Sprint 4.2C subsequently
+delivered receive approval, and Sprint 4.2D delivered the WebView2 host plus interactive close/restore
+smoke evidence. Registry behavior remains covered by deterministic fake-registry tests; release
+validation should still exercise Explorer on the target installation image.

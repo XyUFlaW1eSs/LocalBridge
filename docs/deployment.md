@@ -85,8 +85,9 @@ versioned, non-secret and atomically written with restrictive permissions. On Wi
 and `explorer_context_menu` now synchronize current-user HKCU keys, while the native tray exposes
 share/receive/settings/exit actions. File completion events can produce tray notifications and sounds.
 `auto_accept` is enforced: when disabled, new uploads remain pending until approved or rejected in
-Receive History; no file bytes are accepted while pending. `minimize_to_tray` remains a persisted
-contract until a native hosted window is delivered. The QR image is generated locally
+Receive History; no file bytes are accepted while pending. The Windows WebView2 host enforces
+`minimize_to_tray`; when the runtime is unavailable LocalBridge falls back to the system browser,
+where browser close cannot be intercepted. The QR image is generated locally
 with the MIT-licensed `github.com/skip2/go-qrcode` dependency, so deployment does not require a CDN
 or public QR service.
 
@@ -109,8 +110,9 @@ Enable **Start with Windows** or **Explorer context menu** in `/app/#settings` t
 HKCU entries; no administrator rights are required. Explorer invokes `localbridge.exe -share <files>`
 and the command reuses a running loopback service when possible. The tray menu opens each GUI section
 or requests graceful shutdown. Keep the process in an interactive user session because clipboard and
-tray access belong to that desktop. This is not a Windows Service and the GUI is still browser-hosted;
-closing the browser does not invoke `minimize_to_tray` yet.
+tray access belong to that desktop. This is not a Windows Service. The GUI uses the installed Microsoft
+Edge WebView2 Runtime and the MIT-licensed pure-Go `github.com/jchv/go-webview2` host. Closing the
+native window hides it when configured; use the tray menu to restore it or exit gracefully.
 
 ## Rollback
 

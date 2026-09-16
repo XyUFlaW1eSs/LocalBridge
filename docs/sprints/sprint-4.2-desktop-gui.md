@@ -2,8 +2,8 @@
 
 [简体中文](sprint-4.2-desktop-gui.zh-CN.md)
 
-Status: in progress. Sprint 4.2A, the Sprint 4.2B Windows shell foundation and Sprint 4.2C receive
-approval are delivered. Native hosted-window close-to-tray behavior remains open.
+Status: implementation delivered through Sprint 4.2D. Release packaging and broader device
+validation remain part of the phase-level release gate.
 
 ## Goal
 
@@ -51,4 +51,4 @@ context-menu installation; the backend remains independently runnable for CLI/he
   native tray controls, completion notifications and Explorer multi-file share command.
 - Sprint 4.2C delivered persisted pending/active/rejected uploads, explicit local approve/reject
   controls, pending notifications and a mobile wait-and-resume flow.
-- The remaining 4.2 work is a native hosted window that can enforce close-to-tray.
+- Sprint 4.2D delivered the native WebView2 host, close-to-tray, tray restore and browser fallback.

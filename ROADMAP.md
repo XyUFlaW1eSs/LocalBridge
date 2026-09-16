@@ -12,8 +12,8 @@ collaboration platform.
 - `v0.1.0`: runnable Windows package with foreground diagnostics and bilingual documentation.
 - Phase 4.1: persisted multi-file shares, mobile download/upload pages, HTTP Range,
   Content-Range resume and recovery-safe file storage foundation.
-- Phase 4.2A–4.2C: embedded file GUI, local QR PNG, controlled browser uploads, per-user Windows
-  startup/Explorer synchronization, native tray, completion events and explicit receive approval.
+- Phase 4.2A–4.2D: embedded file GUI, local QR PNG, controlled browser uploads, per-user Windows
+  startup/Explorer synchronization, native tray, completion events, receive approval and WebView2 host.
 
 ## Planned releases
 
@@ -24,7 +24,7 @@ collaboration platform.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.
 - **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer, the embedded GUI and the Windows shell
-  foundation are implemented; URL push, image delivery, a native hosted window, receive approval,
+  foundation, receive approval and native hosted window are implemented; URL push, image delivery,
   composite context jobs and broader transfer state remain.
 - **Phase 5 / `v0.5.x` — Clients and devices:** native iOS/iPadOS, Android, macOS, Linux,
   Windows tray/service, CLI, diagnostics web page and multi-device targeting.

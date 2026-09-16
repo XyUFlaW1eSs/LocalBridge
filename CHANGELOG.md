@@ -20,6 +20,8 @@ All notable changes to LocalBridge are documented here.
   events and completion notifications. Native hosted-window close-to-tray remains pending.
 - Phase 4 Sprint 4.2C: added persisted pending/active/rejected upload states, loopback/authenticated
   approve/reject endpoints, Windows receive-request notifications and a mobile wait-and-resume flow.
+- Phase 4 Sprint 4.2D: added a pure-Go WebView2 Windows host, real close-to-tray behavior, tray restore,
+  browser fallback and an interactive window/health/close/restore smoke test.
 
 ## [0.1.0] - 2026-08-02
 
