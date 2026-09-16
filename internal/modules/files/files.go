@@ -23,9 +23,10 @@ import (
 )
 
 type Module struct {
-	store  *Store
-	logger *slog.Logger
-	bus    *eventbus.Bus
+	store              *Store
+	logger             *slog.Logger
+	bus                *eventbus.Bus
+	autoAcceptProvider func() bool
 }
 
 type createShareRequest struct {
@@ -68,6 +69,17 @@ func NewWithStoreAndBus(store *Store, bus *eventbus.Bus, logger *slog.Logger) *M
 	return &Module{store: store, logger: logger, bus: bus}
 }
 
+// SetAutoAcceptProvider connects the files module to a runtime policy without
+// importing the settings module. A nil provider preserves auto-accept behavior
+// for embedders and existing integrations.
+func (m *Module) SetAutoAcceptProvider(provider func() bool) {
+	m.autoAcceptProvider = provider
+}
+
+func (m *Module) autoAccept() bool {
+	return m.autoAcceptProvider == nil || m.autoAcceptProvider()
+}
+
 func (m *Module) CreateShare(paths []string, idempotencyKey string) (Share, error) {
 	if strings.TrimSpace(idempotencyKey) != "" {
 		if existing, ok := m.store.ShareByIdempotencyKey(strings.TrimSpace(idempotencyKey), time.Now().UTC()); ok {
@@ -98,6 +110,8 @@ func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/files/receivers", m.handleCreateReceiver)
 	mux.HandleFunc("GET /api/v1/files/receives", m.handleListReceives)
 	mux.HandleFunc("DELETE /api/v1/files/receives/{id}", m.handleDeleteReceive)
+	mux.HandleFunc("POST /api/v1/files/uploads/{uploadID}/approve", m.handleApproveUpload)
+	mux.HandleFunc("POST /api/v1/files/uploads/{uploadID}/reject", m.handleRejectUpload)
 
 	mux.HandleFunc("GET /share/{token}", m.handlePublicShare)
 	mux.HandleFunc("GET /share/{token}/metadata", m.handlePublicShareMetadata)
@@ -472,7 +486,7 @@ func (m *Module) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 	if headerKey := strings.TrimSpace(r.Header.Get("Idempotency-Key")); headerKey != "" {
 		idempotencyKey = headerKey
 	}
-	upload, err := m.store.CreateUpload(token, request.Name, request.Size, strings.ToLower(strings.TrimSpace(request.SHA256)), idempotencyKey, time.Now().UTC())
+	upload, created, err := m.store.CreateUploadWithApproval(token, request.Name, request.Size, strings.ToLower(strings.TrimSpace(request.SHA256)), idempotencyKey, m.autoAccept(), time.Now().UTC())
 	if err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "quota") || strings.Contains(err.Error(), "bytes") {
@@ -481,7 +495,49 @@ func (m *Module) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, err.Error(), requestID(r))
 		return
 	}
-	writeJSON(w, http.StatusCreated, upload)
+	if created && upload.Status == uploadStatusPending && m.bus != nil {
+		m.bus.Publish(eventbus.Event{Type: eventbus.FileReceiveRequested, Data: map[string]any{
+			"upload_id": upload.ID,
+			"size":      upload.Size,
+		}})
+	}
+	status := http.StatusCreated
+	if upload.Status == uploadStatusPending {
+		status = http.StatusAccepted
+	}
+	writeJSON(w, status, upload)
+}
+
+func (m *Module) handleApproveUpload(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
+	upload, err := m.store.ApproveUpload(strings.TrimSpace(r.PathValue("uploadID")), time.Now().UTC())
+	if err != nil {
+		status := http.StatusConflict
+		if errors.Is(err, os.ErrNotExist) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error(), requestID(r))
+		return
+	}
+	writeJSON(w, http.StatusOK, upload)
+}
+
+func (m *Module) handleRejectUpload(w http.ResponseWriter, r *http.Request) {
+	if !m.allowManagement(w, r) {
+		return
+	}
+	upload, err := m.store.RejectUpload(strings.TrimSpace(r.PathValue("uploadID")), time.Now().UTC())
+	if err != nil {
+		status := http.StatusConflict
+		if errors.Is(err, os.ErrNotExist) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error(), requestID(r))
+		return
+	}
+	writeJSON(w, http.StatusOK, upload)
 }
 
 func (m *Module) handleGetUpload(w http.ResponseWriter, r *http.Request) {
@@ -628,10 +684,11 @@ var sharePage = template.Must(template.New("share").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LocalBridge share</title><style>body{font:17px system-ui,sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#17202a;background:#f6f8fa}main{background:#fff;border-radius:16px;padding:22px;box-shadow:0 4px 18px #0001}li{margin:14px 0}a{color:#0a66c2;word-break:break-word}.meta{color:#5f6b76;font-size:14px}</style></head><body><main><h1>LocalBridge</h1><p>Shared files</p><ul>{{range .Share.Files}}<li><a download href="{{$.Base}}/files/{{.ID}}">{{.Name}}</a><div class="meta">{{.Size}} bytes · {{.MIMEType}}</div></li>{{end}}</ul><p class="meta">Expires {{.Share.ExpiresAt}}</p></main></body></html>`))
 
 var receiverPage = template.Must(template.New("receiver").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LocalBridge receive</title><style>body{font:17px system-ui,sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#17202a;background:#f6f8fa}main{background:#fff;border-radius:16px;padding:22px;box-shadow:0 4px 18px #0001}input,button{font:inherit;padding:10px;margin:8px 0;width:100%}progress{width:100%;height:20px}.meta{color:#5f6b76;font-size:14px}</style></head><body><main><h1>LocalBridge</h1><p>Select files to send to this Windows device.</p><input id="files" type="file" multiple><button id="send">Send files</button><p id="status" class="meta"></p><progress id="progress" value="0" max="1" hidden></progress></main><script>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LocalBridge receive</title><style>body{font:17px system-ui,sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#17202a;background:#f6f8fa}main{background:#fff;border-radius:16px;padding:22px;box-shadow:0 4px 18px #0001}input,button{font:inherit;padding:10px;margin:8px 0;width:100%}progress{width:100%;height:20px}.meta{color:#5f6b76;font-size:14px}</style></head><body><main><h1>LocalBridge</h1><p>Select files to send to this Windows device.</p><input id="files" type="file" multiple><button id="send">Send files</button><p id="status" class="meta"></p><progress id="progress" value="0" max="1" hidden></progress><script>
 const base={{printf "%q" .Base}}; const chunk=4*1024*1024; const input=document.querySelector('#files'); const status=document.querySelector('#status'); const progress=document.querySelector('#progress');
 async function uploadKey(file){const raw=new TextEncoder().encode(base+'|'+file.name+'|'+file.size+'|'+file.lastModified); const digest=await crypto.subtle.digest('SHA-256',raw); return 'lb-'+[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function sendFile(file){const key=await uploadKey(file); const storageKey='localbridge-upload:'+key; let upload=null; const saved=localStorage.getItem(storageKey); if(saved){const stateResponse=await fetch(base+'/uploads/'+encodeURIComponent(saved)); if(stateResponse.ok) upload=await stateResponse.json();} if(!upload){const startResponse=await fetch(base+'/uploads',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name:file.name,size:file.size})}); if(!startResponse.ok) throw new Error(await startResponse.text()); upload=await startResponse.json(); localStorage.setItem(storageKey,upload.id);} for(let offset=upload.received_bytes;offset<file.size;){const end=Math.min(offset+chunk,file.size); const part=await file.slice(offset,end).arrayBuffer(); const response=await fetch(base+'/uploads/'+upload.id,{method:'PUT',headers:{'Content-Range':'bytes '+offset+'-'+(end-1)+'/'+file.size},body:part}); if(!response.ok) throw new Error(await response.text()); const state=await response.json(); offset=state.received_bytes; progress.value=offset/file.size;} localStorage.removeItem(storageKey)}
+async function waitForApproval(upload){while(upload.status==='pending'){status.textContent='Waiting for approval on Windows: '+upload.name; await new Promise(resolve=>setTimeout(resolve,1500)); const response=await fetch(base+'/uploads/'+encodeURIComponent(upload.id),{cache:'no-store'}); if(!response.ok) throw new Error('Upload request expired or was removed.'); upload=await response.json();} if(upload.status==='rejected') throw new Error('Upload was rejected on Windows.'); if(upload.status==='failed') throw new Error(upload.error||'Upload request failed.'); return upload}
+async function sendFile(file){const key=await uploadKey(file); const storageKey='localbridge-upload:'+key; let upload=null; const saved=localStorage.getItem(storageKey); if(saved){const stateResponse=await fetch(base+'/uploads/'+encodeURIComponent(saved),{cache:'no-store'}); if(stateResponse.ok) upload=await stateResponse.json(); if(upload&&(upload.status==='failed'||upload.status==='rejected')){localStorage.removeItem(storageKey);upload=null}} if(!upload){const startResponse=await fetch(base+'/uploads',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name:file.name,size:file.size})}); if(!startResponse.ok) throw new Error(await startResponse.text()); upload=await startResponse.json(); localStorage.setItem(storageKey,upload.id);} upload=await waitForApproval(upload); for(let offset=upload.received_bytes;offset<file.size;){const end=Math.min(offset+chunk,file.size); const part=await file.slice(offset,end).arrayBuffer(); const response=await fetch(base+'/uploads/'+upload.id,{method:'PUT',headers:{'Content-Range':'bytes '+offset+'-'+(end-1)+'/'+file.size},body:part}); if(!response.ok) throw new Error(await response.text()); const state=await response.json(); offset=state.received_bytes; progress.value=offset/file.size;} localStorage.removeItem(storageKey)}
 document.querySelector('#send').onclick=async()=>{const files=[...input.files]; if(!files.length){status.textContent='Choose at least one file.';return} progress.hidden=false; try{for(const file of files){status.textContent='Sending '+file.name;progress.value=0;await sendFile(file)} status.textContent='Transfer complete.'}catch(error){status.textContent='Transfer failed: '+error.message}};
 </script></main></body></html>`))
 

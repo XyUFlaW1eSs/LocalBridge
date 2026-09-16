@@ -12,6 +12,7 @@ const (
 	DeviceDisconnected   = "device.disconnected"
 	FileSent             = "file.sent"
 	FileReceived         = "file.received"
+	FileReceiveRequested = "file.receive_requested"
 	ImageReceived        = "image.received"
 	NotificationReceived = "notification.received"
 )

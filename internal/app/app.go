@@ -89,6 +89,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 		if err := manager.Register(files); err != nil {
 			return nil, err
 		}
+		files.SetAutoAcceptProvider(func() bool { return settings.Store().Get().AutoAccept })
 	}
 	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, jobStore, log)
 	if err != nil {

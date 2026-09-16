@@ -80,7 +80,8 @@ func (m *Module) Start(ctx context.Context) error {
 	if m.bus != nil {
 		received := m.bus.Subscribe(runCtx, eventbus.FileReceived, 16)
 		sent := m.bus.Subscribe(runCtx, eventbus.FileSent, 16)
-		go m.notifyLoop(runCtx, received, sent)
+		requested := m.bus.Subscribe(runCtx, eventbus.FileReceiveRequested, 16)
+		go m.notifyLoop(runCtx, received, sent, requested)
 	}
 	return nil
 }
@@ -95,7 +96,7 @@ func (m *Module) Stop(ctx context.Context) error {
 
 func (m *Module) OpenGUI(view string) error { return m.backend.OpenGUI(view) }
 
-func (m *Module) notifyLoop(ctx context.Context, received, sent <-chan eventbus.Event) {
+func (m *Module) notifyLoop(ctx context.Context, received, sent, requested <-chan eventbus.Event) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -105,6 +106,10 @@ func (m *Module) notifyLoop(ctx context.Context, received, sent <-chan eventbus.
 				m.backend.Notify(event, m.settings.Get())
 			}
 		case event, ok := <-sent:
+			if ok {
+				m.backend.Notify(event, m.settings.Get())
+			}
+		case event, ok := <-requested:
 			if ok {
 				m.backend.Notify(event, m.settings.Get())
 			}

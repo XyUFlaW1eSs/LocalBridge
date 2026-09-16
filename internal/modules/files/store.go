@@ -333,49 +333,144 @@ func (s *Store) ListUploads() []Upload {
 }
 
 func (s *Store) CreateUpload(token, name string, size int64, expectedHash, idempotencyKey string, now time.Time) (Upload, error) {
+	upload, _, err := s.CreateUploadWithApproval(token, name, size, expectedHash, idempotencyKey, true, now)
+	return upload, err
+}
+
+// CreateUploadWithApproval creates an upload in active or pending state. The
+// returned boolean is true only when a new record was created, allowing callers
+// to publish one receive-request event across idempotent retries.
+func (s *Store) CreateUploadWithApproval(token, name string, size int64, expectedHash, idempotencyKey string, autoAccept bool, now time.Time) (Upload, bool, error) {
 	receiver, ok := s.Receiver(token, now)
 	if !ok {
-		return Upload{}, os.ErrNotExist
+		return Upload{}, false, os.ErrNotExist
 	}
 	name, err := safeName(name)
 	if err != nil {
-		return Upload{}, err
+		return Upload{}, false, err
 	}
 	if size < 1 || size > s.cfg.MaxFileBytes {
-		return Upload{}, fmt.Errorf("upload size must be between 1 and %d bytes", s.cfg.MaxFileBytes)
+		return Upload{}, false, fmt.Errorf("upload size must be between 1 and %d bytes", s.cfg.MaxFileBytes)
 	}
 	if expectedHash != "" && !validHash(expectedHash) {
-		return Upload{}, errors.New("sha256 must be 64 lowercase hexadecimal characters")
+		return Upload{}, false, errors.New("sha256 must be 64 lowercase hexadecimal characters")
 	}
 	if err := validateIdempotencyKey(idempotencyKey); err != nil {
-		return Upload{}, err
+		return Upload{}, false, err
 	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	id, err := randomID()
 	if err != nil {
-		return Upload{}, err
+		return Upload{}, false, err
 	}
-	upload := Upload{ID: id, ReceiverID: receiver.ID, Name: name, Size: size, SHA256: expectedHash, Status: uploadStatusActive, CreatedAt: now, UpdatedAt: now}
+	status := uploadStatusPending
+	if autoAccept {
+		status = uploadStatusActive
+	}
+	upload := Upload{ID: id, ReceiverID: receiver.ID, Name: name, Size: size, SHA256: expectedHash, Status: status, CreatedAt: now, UpdatedAt: now}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var releasedID string
+	var released Upload
 	if idempotencyKey != "" {
-		for _, existing := range s.uploads {
+		for existingID, existing := range s.uploads {
 			if existing.ReceiverID == receiver.ID && existing.IdempotencyKey == idempotencyKey {
-				return existing, nil
+				if existing.Status == uploadStatusFailed || existing.Status == uploadStatusRejected {
+					releasedID = existingID
+					released = existing
+					existing.IdempotencyKey = ""
+					s.uploads[existingID] = existing
+					break
+				}
+				return existing, false, nil
 			}
 		}
 	}
 	if s.reservedBytesLocked()+size > s.cfg.MaxTotalBytes {
-		return Upload{}, errors.New("receive storage quota exceeded")
+		if releasedID != "" {
+			s.uploads[releasedID] = released
+		}
+		return Upload{}, false, errors.New("receive storage quota exceeded")
 	}
 	upload.IdempotencyKey = idempotencyKey
 	s.uploads[id] = upload
 	if err := s.saveLocked(); err != nil {
 		delete(s.uploads, id)
+		if releasedID != "" {
+			s.uploads[releasedID] = released
+		}
+		return Upload{}, false, err
+	}
+	return upload, true, nil
+}
+
+func (s *Store) ApproveUpload(id string, now time.Time) (Upload, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	upload, ok := s.uploads[id]
+	if !ok {
+		return Upload{}, os.ErrNotExist
+	}
+	if upload.Status == uploadStatusActive {
+		return upload, nil
+	}
+	if upload.Status != uploadStatusPending {
+		return Upload{}, fmt.Errorf("upload cannot be approved from status %s", upload.Status)
+	}
+	receiver, receiverOK := s.receivers[upload.ReceiverID]
+	if !receiverOK || receiver.Status != shareStatusActive || !receiver.ExpiresAt.After(now) {
+		return Upload{}, os.ErrNotExist
+	}
+	if upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
+		upload.Status = uploadStatusFailed
+		upload.Error = "upload expired"
+		upload.UpdatedAt = now
+		s.uploads[id] = upload
+		_ = s.saveLocked()
+		return Upload{}, os.ErrNotExist
+	}
+	previous := upload
+	upload.Status = uploadStatusActive
+	upload.UpdatedAt = now
+	s.uploads[id] = upload
+	if err := s.saveLocked(); err != nil {
+		s.uploads[id] = previous
 		return Upload{}, err
 	}
+	return upload, nil
+}
+
+func (s *Store) RejectUpload(id string, now time.Time) (Upload, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	upload, ok := s.uploads[id]
+	if !ok {
+		return Upload{}, os.ErrNotExist
+	}
+	if upload.Status == uploadStatusRejected {
+		return upload, nil
+	}
+	if upload.Status != uploadStatusPending {
+		return Upload{}, fmt.Errorf("upload cannot be rejected from status %s", upload.Status)
+	}
+	previous := upload
+	upload.Status = uploadStatusRejected
+	upload.Error = "upload rejected by receiver"
+	upload.UpdatedAt = now
+	s.uploads[id] = upload
+	if err := s.saveLocked(); err != nil {
+		s.uploads[id] = previous
+		return Upload{}, err
+	}
+	_ = os.Remove(s.partPath(id))
 	return upload, nil
 }
 
@@ -392,7 +487,13 @@ func (s *Store) Upload(id, token string, start, total int64, data []byte, now ti
 	if !ok || upload.Status == uploadStatusFailed {
 		return Upload{}, os.ErrNotExist
 	}
-	if upload.Status == uploadStatusActive && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
+	if upload.Status == uploadStatusPending {
+		return Upload{}, errors.New("upload is waiting for approval")
+	}
+	if upload.Status == uploadStatusRejected {
+		return Upload{}, errors.New("upload was rejected")
+	}
+	if (upload.Status == uploadStatusActive || upload.Status == uploadStatusPending) && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
 		upload.Status = uploadStatusFailed
 		upload.Error = "upload expired"
 		upload.UpdatedAt = now
@@ -490,7 +591,7 @@ func (s *Store) GetUploadForToken(token, id string, now time.Time) (Upload, bool
 	if !ok || receiver.Status != shareStatusActive || !constantTokenEqual(receiver.Token, token) {
 		return Upload{}, false
 	}
-	if upload.Status == uploadStatusActive && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
+	if (upload.Status == uploadStatusActive || upload.Status == uploadStatusPending) && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
 		upload.Status = uploadStatusFailed
 		upload.Error = "upload expired"
 		upload.UpdatedAt = now
@@ -544,7 +645,7 @@ func (s *Store) expireLocked(now time.Time) bool {
 		}
 	}
 	for id, upload := range s.uploads {
-		if upload.Status == uploadStatusActive && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
+		if (upload.Status == uploadStatusActive || upload.Status == uploadStatusPending) && upload.CreatedAt.Add(s.cfg.UploadTTL).Before(now) {
 			upload.Status = uploadStatusFailed
 			upload.Error = "upload expired"
 			upload.UpdatedAt = now
@@ -574,7 +675,7 @@ func (s *Store) reservedBytesLocked() int64 {
 		total += record.Size
 	}
 	for _, upload := range s.uploads {
-		if upload.Status == uploadStatusActive {
+		if upload.Status == uploadStatusActive || upload.Status == uploadStatusPending {
 			total += upload.Size
 		}
 	}

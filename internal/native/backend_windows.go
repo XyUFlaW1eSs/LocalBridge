@@ -208,6 +208,8 @@ func (b *platformBackend) Notify(event eventbus.Event, value settings.Settings) 
 	messageText := "文件分享完成"
 	if event.Type == eventbus.FileReceived {
 		messageText = "文件接收完成"
+	} else if event.Type == eventbus.FileReceiveRequested {
+		messageText = "有文件等待接收确认"
 	}
 	message, _ := windows.UTF16FromString(messageText)
 	copy(nid.Info[:], message)

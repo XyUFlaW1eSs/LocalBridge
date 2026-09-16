@@ -457,6 +457,163 @@ func TestReceiveHTTPRejectsTraversalAndBadRanges(t *testing.T) {
 	}
 }
 
+func TestReceiveApprovalWorkflow(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := eventbus.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	requestedEvents := bus.Subscribe(ctx, eventbus.FileReceiveRequested, 4)
+	module := NewWithStoreAndBus(store, bus, nil)
+	module.SetAutoAcceptProvider(func() bool { return false })
+	mux := http.NewServeMux()
+	module.Routes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	receiver, err := store.CreateReceiver(time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, _ := json.Marshal(map[string]any{"name": "approval.txt", "size": 4})
+	create := func(key string) (*http.Response, Upload) {
+		t.Helper()
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/receive/"+receiver.Token+"/uploads", bytes.NewReader(metadata))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", key)
+		response, requestErr := http.DefaultClient.Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		var upload Upload
+		if err := json.NewDecoder(response.Body).Decode(&upload); err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		return response, upload
+	}
+
+	response, upload := create("approval-1")
+	if response.StatusCode != http.StatusAccepted || upload.Status != uploadStatusPending {
+		t.Fatalf("pending upload status=%d upload=%#v", response.StatusCode, upload)
+	}
+	select {
+	case event := <-requestedEvents:
+		if event.Type != eventbus.FileReceiveRequested {
+			t.Fatalf("unexpected request event: %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("file.receive_requested event was not published")
+	}
+	response, retry := create("approval-1")
+	if response.StatusCode != http.StatusAccepted || retry.ID != upload.ID {
+		t.Fatalf("idempotent pending retry status=%d upload=%#v", response.StatusCode, retry)
+	}
+	select {
+	case event := <-requestedEvents:
+		t.Fatalf("idempotent retry published another request event: %#v", event)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	chunk, _ := http.NewRequest(http.MethodPut, server.URL+"/receive/"+receiver.Token+"/uploads/"+upload.ID, strings.NewReader("data"))
+	chunk.Header.Set("Content-Range", "bytes 0-3/4")
+	response, err = http.DefaultClient.Do(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("pending upload accepted data: status=%d body=%s", response.StatusCode, readBody(response))
+	}
+	_ = response.Body.Close()
+
+	remoteApprove := httptest.NewRequest(http.MethodPost, "/api/v1/files/uploads/"+upload.ID+"/approve", nil)
+	remoteApprove.RemoteAddr = "192.168.1.55:43210"
+	remoteRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(remoteRecorder, remoteApprove)
+	if remoteRecorder.Code != http.StatusForbidden {
+		t.Fatalf("remote approval should be forbidden, got %d", remoteRecorder.Code)
+	}
+
+	response, err = http.Post(server.URL+"/api/v1/files/uploads/"+upload.ID+"/approve", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("approve status=%d body=%s", response.StatusCode, readBody(response))
+	}
+	_ = response.Body.Close()
+	chunk, _ = http.NewRequest(http.MethodPut, server.URL+"/receive/"+receiver.Token+"/uploads/"+upload.ID, strings.NewReader("data"))
+	chunk.Header.Set("Content-Range", "bytes 0-3/4")
+	response, err = http.DefaultClient.Do(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("approved upload did not complete: status=%d body=%s", response.StatusCode, readBody(response))
+	}
+	_ = response.Body.Close()
+
+	response, rejected := create("approval-2")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("second pending upload status=%d", response.StatusCode)
+	}
+	response, err = http.Post(server.URL+"/api/v1/files/uploads/"+rejected.ID+"/reject", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("reject status=%d body=%s", response.StatusCode, readBody(response))
+	}
+	_ = response.Body.Close()
+	statusResponse, err := http.Get(server.URL + "/receive/" + receiver.Token + "/uploads/" + rejected.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rejectedState Upload
+	if err := json.NewDecoder(statusResponse.Body).Decode(&rejectedState); err != nil {
+		t.Fatal(err)
+	}
+	_ = statusResponse.Body.Close()
+	if rejectedState.Status != uploadStatusRejected {
+		t.Fatalf("rejected state=%#v", rejectedState)
+	}
+	response, retried := create("approval-2")
+	if response.StatusCode != http.StatusAccepted || retried.Status != uploadStatusPending || retried.ID == rejected.ID {
+		t.Fatalf("rejected upload was not restartable: status=%d upload=%#v", response.StatusCode, retried)
+	}
+}
+
+func TestPendingUploadSurvivesRestart(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver, err := store.CreateReceiver(time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	upload, created, err := store.CreateUploadWithApproval(receiver.Token, "pending.txt", 4, "", "pending-restart", false, time.Now().UTC())
+	if err != nil || !created || upload.Status != uploadStatusPending {
+		t.Fatalf("create pending upload: upload=%#v created=%v err=%v", upload, created, err)
+	}
+	reloaded, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, ok := reloaded.GetUpload(upload.ID)
+	if !ok || persisted.Status != uploadStatusPending {
+		t.Fatalf("pending upload did not survive restart: upload=%#v ok=%v", persisted, ok)
+	}
+	approved, err := reloaded.ApproveUpload(upload.ID, time.Now().UTC())
+	if err != nil || approved.Status != uploadStatusActive {
+		t.Fatalf("approve reloaded upload: upload=%#v err=%v", approved, err)
+	}
+}
+
 func TestFileTransferEventsArePublishedOnce(t *testing.T) {
 	cfg := testConfig(t)
 	store, err := NewStore(cfg)

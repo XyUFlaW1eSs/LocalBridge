@@ -3,11 +3,13 @@ package files
 import "time"
 
 const (
-	shareStatusActive  = "active"
-	shareStatusExpired = "expired"
-	uploadStatusActive = "active"
-	uploadStatusDone   = "completed"
-	uploadStatusFailed = "failed"
+	shareStatusActive    = "active"
+	shareStatusExpired   = "expired"
+	uploadStatusPending  = "pending"
+	uploadStatusActive   = "active"
+	uploadStatusDone     = "completed"
+	uploadStatusFailed   = "failed"
+	uploadStatusRejected = "rejected"
 )
 
 // File describes a file without exposing its local source path. It is safe to
