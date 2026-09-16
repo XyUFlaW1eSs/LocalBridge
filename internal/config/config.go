@@ -2,16 +2,21 @@ package config
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
+const CurrentVersion = 1
+
 type Config struct {
+	Version   int             `yaml:"version" json:"version"`
 	Server    ServerConfig    `yaml:"server" json:"server"`
 	Device    DeviceConfig    `yaml:"device" json:"device"`
 	Security  SecurityConfig  `yaml:"security" json:"security"`
@@ -21,6 +26,21 @@ type Config struct {
 	Files     FilesConfig     `yaml:"files" json:"files"`
 	Settings  SettingsConfig  `yaml:"settings" json:"settings"`
 	Logging   LoggingConfig   `yaml:"logging" json:"logging"`
+	metadata  loadMetadata
+}
+
+type loadMetadata struct {
+	Source        string
+	SourceVersion int
+	Migrated      bool
+}
+
+type Diagnostics struct {
+	SchemaVersion       int            `json:"schema_version"`
+	SourceSchemaVersion int            `json:"source_schema_version"`
+	Migrated            bool           `json:"migrated"`
+	Source              string         `json:"source"`
+	Effective           map[string]any `json:"effective"`
 }
 
 type ServerConfig struct {
@@ -91,6 +111,7 @@ type LoggingConfig struct {
 
 func Default() Config {
 	return Config{
+		Version:   CurrentVersion,
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json", HealthInterval: 30 * time.Second},
 		Security:  SecurityConfig{PeerTokenTTL: 30 * 24 * time.Hour, TokenOverlapTTL: 10 * time.Minute},
@@ -100,6 +121,7 @@ func Default() Config {
 		Files:     FilesConfig{Enabled: true, StorePath: "data/files.json", ShareDir: "data/shared", ReceiveDir: "data/received", MaxFileBytes: 2 * 1024 * 1024 * 1024, MaxTotalBytes: 4 * 1024 * 1024 * 1024, MaxFilesPerShare: 100, ShareTTL: 24 * time.Hour, UploadTTL: 24 * time.Hour},
 		Settings:  SettingsConfig{StorePath: "data/settings.json"},
 		Logging:   LoggingConfig{Level: "info", Format: "text"},
+		metadata:  loadMetadata{Source: "defaults", SourceVersion: CurrentVersion},
 	}
 }
 
@@ -109,9 +131,18 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("read config %q: %w", path, err)
 	}
+	sourceVersion, err := declaredVersion(data)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse config %q: %w", path, err)
+	}
+	if err := validateVersion(sourceVersion); err != nil {
+		return Config{}, fmt.Errorf("parse config %q: %w", path, err)
+	}
 	if err := decode(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config %q: %w", path, err)
 	}
+	cfg.Version = CurrentVersion
+	cfg.metadata = loadMetadata{Source: "file", SourceVersion: sourceVersion, Migrated: sourceVersion != CurrentVersion}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -136,30 +167,133 @@ func LoadOrDefault(path string) (Config, error) {
 func decode(data []byte, cfg *Config) error {
 	trimmed := strings.TrimSpace(string(data))
 	if strings.HasPrefix(trimmed, "{") {
-		return json.Unmarshal(data, cfg)
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(cfg); err != nil {
+			return err
+		}
+		var extra any
+		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+			if err == nil {
+				return errors.New("multiple JSON values are not allowed")
+			}
+			return err
+		}
+		return nil
 	}
 	section := ""
 	scanner := bufio.NewScanner(strings.NewReader(trimmed))
 	for lineNo := 1; scanner.Scan(); lineNo++ {
-		line := strings.TrimSpace(scanner.Text())
+		rawLine := scanner.Text()
+		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
+		topLevel := len(rawLine) == len(strings.TrimLeft(rawLine, " \t"))
 		if strings.HasSuffix(line, ":") {
+			if !topLevel {
+				return fmt.Errorf("line %d: nested sections are not supported", lineNo)
+			}
 			section = strings.TrimSpace(strings.TrimSuffix(line, ":"))
+			if section == "version" {
+				return fmt.Errorf("line %d: version requires an integer value", lineNo)
+			}
+			if !knownSection(section) {
+				return fmt.Errorf("line %d: unknown configuration section %s", lineNo, section)
+			}
 			continue
 		}
 		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 || section == "" {
+		if len(parts) != 2 {
 			return fmt.Errorf("line %d: expected section or key: value", lineNo)
 		}
 		key := strings.TrimSpace(parts[0])
 		value := strings.Trim(strings.TrimSpace(parts[1]), "\"")
+		if topLevel {
+			if key != "version" {
+				return fmt.Errorf("line %d: unknown root configuration key %s", lineNo, key)
+			}
+			v, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("line %d: invalid version: %w", lineNo, err)
+			}
+			cfg.Version = v
+			section = ""
+			continue
+		}
+		if section == "" {
+			return fmt.Errorf("line %d: expected section before %s", lineNo, key)
+		}
 		if err := setValue(cfg, section, key, value); err != nil {
 			return fmt.Errorf("line %d: %w", lineNo, err)
 		}
 	}
 	return scanner.Err()
+}
+
+func knownSection(section string) bool {
+	switch section {
+	case "server", "device", "security", "discovery", "sync", "clipboard", "files", "settings", "logging":
+		return true
+	default:
+		return false
+	}
+}
+
+func declaredVersion(data []byte) (int, error) {
+	trimmed := strings.TrimSpace(string(data))
+	if strings.HasPrefix(trimmed, "{") {
+		var root map[string]json.RawMessage
+		if err := json.Unmarshal(data, &root); err != nil {
+			return 0, err
+		}
+		raw, ok := root["version"]
+		if !ok {
+			return 0, nil
+		}
+		var version int
+		if err := json.Unmarshal(raw, &version); err != nil {
+			return 0, fmt.Errorf("invalid version: %w", err)
+		}
+		return version, nil
+	}
+	version := 0
+	found := false
+	scanner := bufio.NewScanner(strings.NewReader(trimmed))
+	for lineNo := 1; scanner.Scan(); lineNo++ {
+		rawLine := scanner.Text()
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || len(rawLine) != len(strings.TrimLeft(rawLine, " \t")) {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) != "version" || strings.TrimSpace(parts[1]) == "" {
+			continue
+		}
+		if found {
+			return 0, fmt.Errorf("line %d: duplicate root version", lineNo)
+		}
+		v, err := strconv.Atoi(strings.Trim(strings.TrimSpace(parts[1]), "\""))
+		if err != nil {
+			return 0, fmt.Errorf("line %d: invalid version: %w", lineNo, err)
+		}
+		version = v
+		found = true
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+	return version, nil
+}
+
+func validateVersion(version int) error {
+	if version < 0 {
+		return fmt.Errorf("configuration version must not be negative: %d", version)
+	}
+	if version > CurrentVersion {
+		return fmt.Errorf("unsupported configuration version %d (current %d)", version, CurrentVersion)
+	}
+	return nil
 }
 
 func setValue(cfg *Config, section, key, value string) error {
@@ -335,6 +469,9 @@ func setValue(cfg *Config, section, key, value string) error {
 }
 
 func (c Config) Validate() error {
+	if c.Version != CurrentVersion {
+		return fmt.Errorf("configuration version must be %d after migration: %d", CurrentVersion, c.Version)
+	}
 	if c.Server.Host == "" {
 		return errors.New("server.host must not be empty")
 	}
@@ -407,6 +544,57 @@ func (c Config) Validate() error {
 		return errors.New("settings.store_path must not be empty")
 	}
 	return nil
+}
+
+func (c Config) Diagnostics() Diagnostics {
+	source := c.metadata.Source
+	if source == "" {
+		source = "programmatic"
+	}
+	sourceVersion := c.metadata.SourceVersion
+	if sourceVersion == 0 && !c.metadata.Migrated && c.Version == CurrentVersion {
+		sourceVersion = CurrentVersion
+	}
+	return Diagnostics{
+		SchemaVersion:       c.Version,
+		SourceSchemaVersion: sourceVersion,
+		Migrated:            c.metadata.Migrated,
+		Source:              source,
+		Effective: map[string]any{
+			"server": map[string]any{
+				"host": c.Server.Host, "port": c.Server.Port, "read_timeout": c.Server.ReadTimeout.String(),
+				"write_timeout": c.Server.WriteTimeout.String(), "idle_timeout": c.Server.IdleTimeout.String(),
+			},
+			"device": map[string]any{
+				"id": c.Device.ID, "name": c.Device.Name, "registry_path": c.Device.RegistryPath,
+				"health_interval": c.Device.HealthInterval.String(),
+			},
+			"security": map[string]any{
+				"auth_enabled": c.Security.AuthEnabled, "bearer_token_configured": strings.TrimSpace(c.Security.BearerToken) != "",
+				"pairing_code_configured": strings.TrimSpace(c.Security.PairingCode) != "", "peer_token_ttl": c.Security.PeerTokenTTL.String(),
+				"token_overlap_ttl": c.Security.TokenOverlapTTL.String(),
+			},
+			"discovery": map[string]any{
+				"enabled": c.Discovery.Enabled, "port": c.Discovery.Port, "announce_interval": c.Discovery.AnnounceInterval.String(),
+			},
+			"sync": map[string]any{
+				"enabled": c.Sync.Enabled, "store_path": c.Sync.StorePath, "max_jobs": c.Sync.MaxJobs,
+				"job_retention": c.Sync.JobRetention.String(),
+			},
+			"clipboard": map[string]any{
+				"enabled": c.Clipboard.Enabled, "max_text_bytes": c.Clipboard.MaxTextBytes,
+				"watch_interval": c.Clipboard.WatchInterval.String(),
+			},
+			"files": map[string]any{
+				"enabled": c.Files.Enabled, "store_path": c.Files.StorePath, "share_dir": c.Files.ShareDir,
+				"receive_dir": c.Files.ReceiveDir, "max_file_bytes": c.Files.MaxFileBytes,
+				"max_total_bytes": c.Files.MaxTotalBytes, "max_files_per_share": c.Files.MaxFilesPerShare,
+				"share_ttl": c.Files.ShareTTL.String(), "upload_ttl": c.Files.UploadTTL.String(),
+			},
+			"settings": map[string]any{"store_path": c.Settings.StorePath},
+			"logging":  map[string]any{"level": c.Logging.Level, "format": c.Logging.Format},
+		},
+	}
 }
 
 func (c ServerConfig) Address() string { return fmt.Sprintf("%s:%d", c.Host, c.Port) }

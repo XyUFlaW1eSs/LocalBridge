@@ -63,7 +63,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 			return nil, err
 		}
 	}
-	capabilities := []string{"system.health", "system.capabilities", "device.registry", "device.pairing", "device.discovery", "device.token.rotate"}
+	capabilities := []string{"system.health", "system.capabilities", "system.config.read", "device.registry", "device.pairing", "device.discovery", "device.token.rotate"}
 	if cfg.Sync.Enabled {
 		capabilities = append(capabilities, "sync.jobs")
 	}
@@ -129,6 +129,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetPublicPathPrefixes("/share/", "/receive/")
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
+	srv.SetRuntimeConfig(cfg.Diagnostics())
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv, files: files, native: nativeModule, exit: exitRequests}, nil
 }
 

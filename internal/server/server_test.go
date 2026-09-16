@@ -146,3 +146,57 @@ func TestAuthenticatedContextMarker(t *testing.T) {
 		t.Fatalf("authenticated context marker missing, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestEffectiveConfigDiagnosticsAccess(t *testing.T) {
+	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	s.SetRuntimeConfig(map[string]any{"schema_version": 1, "effective": map[string]any{"security": map[string]any{"bearer_token_configured": false}}})
+
+	remote := httptest.NewRequest(http.MethodGet, "/api/v1/system/config", nil)
+	remote.RemoteAddr = "192.168.1.20:1234"
+	remoteRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(remoteRecorder, remote)
+	if remoteRecorder.Code != http.StatusForbidden {
+		t.Fatalf("unauthenticated remote diagnostics should be forbidden, got %d: %s", remoteRecorder.Code, remoteRecorder.Body.String())
+	}
+
+	local := httptest.NewRequest(http.MethodGet, "/api/v1/system/config", nil)
+	local.RemoteAddr = "127.0.0.1:1234"
+	localRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(localRecorder, local)
+	if localRecorder.Code != http.StatusOK || !strings.Contains(localRecorder.Body.String(), `"schema_version":1`) {
+		t.Fatalf("loopback diagnostics failed: %d %s", localRecorder.Code, localRecorder.Body.String())
+	}
+}
+
+func TestEffectiveConfigDiagnosticsRequireManagementToken(t *testing.T) {
+	s := New("127.0.0.1:0", 0, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	s.SetAuthToken("0123456789abcdef")
+	s.SetPeerTokenValidator(func(token string) bool { return token == "peer-token" })
+	s.SetRuntimeConfig(map[string]any{"schema_version": 1})
+
+	localWithoutToken := httptest.NewRequest(http.MethodGet, "/api/v1/system/config", nil)
+	localWithoutToken.RemoteAddr = "127.0.0.1:1234"
+	localWithoutTokenRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(localWithoutTokenRecorder, localWithoutToken)
+	if localWithoutTokenRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("authenticated deployment allowed tokenless loopback diagnostics: %d %s", localWithoutTokenRecorder.Code, localWithoutTokenRecorder.Body.String())
+	}
+
+	peer := httptest.NewRequest(http.MethodGet, "/api/v1/system/config", nil)
+	peer.RemoteAddr = "192.168.1.20:1234"
+	peer.Header.Set("Authorization", "Bearer peer-token")
+	peerRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(peerRecorder, peer)
+	if peerRecorder.Code != http.StatusForbidden {
+		t.Fatalf("peer token read management diagnostics: %d %s", peerRecorder.Code, peerRecorder.Body.String())
+	}
+
+	management := httptest.NewRequest(http.MethodGet, "/api/v1/system/config", nil)
+	management.RemoteAddr = "192.168.1.20:1234"
+	management.Header.Set("Authorization", "Bearer 0123456789abcdef")
+	managementRecorder := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(managementRecorder, management)
+	if managementRecorder.Code != http.StatusOK {
+		t.Fatalf("management token could not read diagnostics: %d %s", managementRecorder.Code, managementRecorder.Body.String())
+	}
+}

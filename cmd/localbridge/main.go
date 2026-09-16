@@ -23,6 +23,7 @@ import (
 func main() {
 	configPath := flag.String("config", "configs/config.yaml", "path to YAML configuration")
 	showVersion := flag.Bool("version", false, "print version")
+	checkConfig := flag.Bool("check-config", false, "validate configuration and print redacted effective values")
 	shareFiles := flag.Bool("share", false, "share file arguments through LocalBridge")
 	flag.Parse()
 	if *showVersion {
@@ -30,10 +31,25 @@ func main() {
 		return
 	}
 
-	cfg, err := config.LoadOrDefault(*configPath)
+	var cfg config.Config
+	var err error
+	if *checkConfig {
+		cfg, err = config.Load(*configPath)
+	} else {
+		cfg, err = config.LoadOrDefault(*configPath)
+	}
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
+	}
+	if *checkConfig {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(cfg.Diagnostics()); err != nil {
+			slog.Error("failed to write configuration diagnostics", "error", err)
+			os.Exit(1)
+		}
+		return
 	}
 	var paths []string
 	if *shareFiles {

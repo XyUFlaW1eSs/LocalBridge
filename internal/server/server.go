@@ -21,6 +21,7 @@ type Server struct {
 	peerTokenValidator func(string) bool
 	publicPathPrefixes []string
 	runtimeInfo        RuntimeInfo
+	runtimeConfig      any
 }
 
 type RuntimeInfo struct {
@@ -55,6 +56,17 @@ func New(address string, readTimeout, writeTimeout, idleTimeout time.Duration, l
 			"capabilities": capabilities,
 		})
 	})
+	mux.HandleFunc("GET /api/v1/system/config", func(w http.ResponseWriter, r *http.Request) {
+		if !requestIsLoopback(r) && !ManagementAuthenticated(r) {
+			writeError(w, http.StatusForbidden, "effective configuration diagnostics require local or management access", requestIDFrom(r))
+			return
+		}
+		if s.runtimeConfig == nil {
+			writeError(w, http.StatusServiceUnavailable, "effective configuration diagnostics are unavailable", requestIDFrom(r))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.runtimeConfig)
+	})
 	if routes != nil {
 		routes(mux)
 	}
@@ -75,6 +87,8 @@ func (s *Server) SetPublicPathPrefixes(prefixes ...string) {
 }
 
 func (s *Server) SetRuntimeInfo(info RuntimeInfo) { s.runtimeInfo = info }
+
+func (s *Server) SetRuntimeConfig(value any) { s.runtimeConfig = value }
 
 func (s *Server) Start() error {
 	s.logger.Info("HTTP server started", "address", s.http.Addr)
@@ -100,6 +114,7 @@ func requestLogging(logger *slog.Logger, next http.Handler) http.Handler {
 
 type requestIDKey struct{}
 type authenticatedKey struct{}
+type authenticationKindKey struct{}
 
 // Authenticated reports whether the request passed the configured global or
 // peer bearer-token check. Feature modules can use this to distinguish an
@@ -107,6 +122,13 @@ type authenticatedKey struct{}
 func Authenticated(r *http.Request) bool {
 	value, _ := r.Context().Value(authenticatedKey{}).(bool)
 	return value
+}
+
+// ManagementAuthenticated reports whether the configured management bearer
+// token, rather than a peer token, authenticated the request.
+func ManagementAuthenticated(r *http.Request) bool {
+	value, _ := r.Context().Value(authenticationKindKey{}).(string)
+	return value == "management"
 }
 
 func requestIDMiddleware(next http.Handler) http.Handler {
@@ -169,7 +191,12 @@ func authentication(s *Server, next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid authentication token", requestIDFrom(r))
 			return
 		}
+		kind := "peer"
+		if validGlobal {
+			kind = "management"
+		}
 		ctx := context.WithValue(r.Context(), authenticatedKey{}, true)
+		ctx = context.WithValue(ctx, authenticationKindKey{}, kind)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
