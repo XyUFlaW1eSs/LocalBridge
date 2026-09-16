@@ -59,6 +59,9 @@ func TestPairListAndRevoke(t *testing.T) {
 	}
 	reloadedMux := http.NewServeMux()
 	reloaded.Routes(reloadedMux)
+	if !reloaded.ValidatePeerToken(paired.Token) {
+		t.Fatal("persisted peer token was not valid after restart")
+	}
 	reloadedList := httptest.NewRecorder()
 	reloadedMux.ServeHTTP(reloadedList, httptest.NewRequest(http.MethodGet, "/api/v1/devices/iphone", nil))
 	if reloadedList.Code != http.StatusOK {
@@ -76,6 +79,121 @@ func TestPairListAndRevoke(t *testing.T) {
 	if revoke.Code != http.StatusNoContent {
 		t.Fatalf("revoke failed: %d %s", revoke.Code, revoke.Body.String())
 	}
+	if m.ValidatePeerToken(paired.Token) {
+		t.Fatal("revoked peer token remained valid")
+	}
+}
+
+func TestPeerTokenRotationOverlapAndExpiry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	security := config.SecurityConfig{PairingCode: "pair-me", PeerTokenTTL: time.Hour, TokenOverlapTTL: 5 * time.Minute}
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, security, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 16, 4, 0, 0, 0, time.UTC)
+	m.now = func() time.Time { return now }
+	mux := http.NewServeMux()
+	m.Routes(mux)
+
+	pair := httptest.NewRecorder()
+	mux.ServeHTTP(pair, httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(`{"code":"pair-me","id":"iphone","name":"iPhone"}`)))
+	if pair.Code != http.StatusOK {
+		t.Fatalf("pair failed: %d %s", pair.Code, pair.Body.String())
+	}
+	var initial struct {
+		Token  string     `json:"token"`
+		Device publicPeer `json:"device"`
+	}
+	if err := json.Unmarshal(pair.Body.Bytes(), &initial); err != nil {
+		t.Fatal(err)
+	}
+	if initial.Device.TokenExpiresAt == nil || !initial.Device.TokenExpiresAt.Equal(now.Add(time.Hour)) || !m.ValidatePeerToken(initial.Token) {
+		t.Fatalf("unexpected initial token response: %s", pair.Body.String())
+	}
+
+	now = now.Add(10 * time.Minute)
+	rotate := httptest.NewRecorder()
+	rotateRequest := httptest.NewRequest(http.MethodPost, "/api/v1/devices/iphone/token/rotate", nil)
+	rotateRequest.Header.Set("Authorization", "Bearer "+initial.Token)
+	mux.ServeHTTP(rotate, rotateRequest)
+	if rotate.Code != http.StatusOK {
+		t.Fatalf("rotate failed: %d %s", rotate.Code, rotate.Body.String())
+	}
+	var rotated struct {
+		Token  string     `json:"token"`
+		Device publicPeer `json:"device"`
+	}
+	if err := json.Unmarshal(rotate.Body.Bytes(), &rotated); err != nil {
+		t.Fatal(err)
+	}
+	if rotated.Token == initial.Token || !m.ValidatePeerToken(initial.Token) || !m.ValidatePeerToken(rotated.Token) {
+		t.Fatalf("rotation did not preserve bounded overlap: %s", rotate.Body.String())
+	}
+	forbidden := httptest.NewRecorder()
+	forbiddenRequest := httptest.NewRequest(http.MethodPost, "/api/v1/devices/iphone/token/rotate", nil)
+	forbiddenRequest.Header.Set("Authorization", "Bearer unrelated-peer-token")
+	mux.ServeHTTP(forbidden, forbiddenRequest)
+	if forbidden.Code != http.StatusForbidden {
+		t.Fatalf("unrelated peer token rotated device: %d %s", forbidden.Code, forbidden.Body.String())
+	}
+
+	now = now.Add(6 * time.Minute)
+	if m.ValidatePeerToken(initial.Token) || !m.ValidatePeerToken(rotated.Token) {
+		t.Fatal("old token survived overlap or current token stopped early")
+	}
+	reloaded, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, security, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded.now = func() time.Time { return now }
+	if !reloaded.ValidatePeerToken(rotated.Token) || reloaded.ValidatePeerToken(initial.Token) {
+		t.Fatal("rotated token state did not survive restart")
+	}
+
+	now = time.Date(2026, 9, 16, 5, 11, 0, 0, time.UTC)
+	if reloaded.ValidatePeerToken(rotated.Token) {
+		t.Fatal("current token survived its configured TTL")
+	}
+	get := httptest.NewRecorder()
+	reloadedMux := http.NewServeMux()
+	reloaded.Routes(reloadedMux)
+	reloadedMux.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/v1/devices/iphone", nil))
+	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `"status":"token_expired"`) || strings.Contains(get.Body.String(), rotated.Token) {
+		t.Fatalf("expired public peer is incorrect or leaks token: %d %s", get.Code, get.Body.String())
+	}
+}
+
+func TestRegistryV1MigratesMissingTokensToRepairRequired(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	legacy := `{"version":1,"peers":[{"id":"legacy-phone","name":"Legacy","status":"paired","paired_at":"2026-01-01T00:00:00Z","last_seen":"2026-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.ValidatePeerToken("anything") {
+		t.Fatal("legacy peer without a token authenticated")
+	}
+	mux := http.NewServeMux()
+	m.Routes(mux)
+	get := httptest.NewRecorder()
+	mux.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/v1/devices/legacy-phone", nil))
+	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `"status":"repair_required"`) {
+		t.Fatalf("legacy migration status=%d body=%s", get.Code, get.Body.String())
+	}
+	if strings.Contains(get.Body.String(), "token_issued_at") || strings.Contains(get.Body.String(), "token_expires_at") {
+		t.Fatalf("legacy peer exposed meaningless zero token timestamps: %s", get.Body.String())
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"version": 2`) {
+		t.Fatalf("legacy registry was not migrated: %s", data)
+	}
 }
 
 func TestPairRejectsInvalidCode(t *testing.T) {
@@ -89,6 +207,20 @@ func TestPairRejectsInvalidCode(t *testing.T) {
 	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(`{"code":"wrong","id":"iphone"}`)))
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected invalid pairing code to return 401, got %d", recorder.Code)
+	}
+}
+
+func TestPairingIsDisabledWithoutConfiguredCode(t *testing.T) {
+	m, err := New(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: filepath.Join(t.TempDir(), "devices.json")}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	m.Routes(mux)
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(`{"id":"iphone"}`)))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("empty pairing code unexpectedly enabled pairing: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 

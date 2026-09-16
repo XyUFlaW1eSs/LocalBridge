@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,9 +26,14 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 )
 
-const registryVersion = 1
+const registryVersion = 2
 const maxRegistryBytes = 1024 * 1024
 const maxPeers = 1024
+
+const (
+	defaultPeerTokenTTL    = 30 * 24 * time.Hour
+	defaultTokenOverlapTTL = 10 * time.Minute
+)
 
 type Module struct {
 	cfg          config.DeviceConfig
@@ -47,13 +54,23 @@ type Module struct {
 	discoveryCancel context.CancelFunc
 	healthCancel    context.CancelFunc
 	lifecycleCancel context.CancelFunc
+	now             func() time.Time
 }
 
 func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, store *syncstore.Store, logger *slog.Logger) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer)}
+	if security.PeerTokenTTL == 0 {
+		security.PeerTokenTTL = defaultPeerTokenTTL
+	}
+	if security.TokenOverlapTTL == 0 {
+		security.TokenOverlapTTL = defaultTokenOverlapTTL
+	}
+	if security.PeerTokenTTL < 0 || security.TokenOverlapTTL < 0 || security.TokenOverlapTTL >= security.PeerTokenTTL {
+		return nil, errors.New("invalid peer token lifetime configuration")
+	}
+	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer), now: func() time.Time { return time.Now().UTC() }}
 	if err := m.load(); err != nil {
 		return nil, err
 	}
@@ -118,8 +135,12 @@ func (m *Module) ValidatePeerToken(token string) bool {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	now := m.now()
 	for _, peer := range m.peers {
-		if subtle.ConstantTimeCompare([]byte(token), []byte(peer.Token)) == 1 {
+		currentMatch := constantTokenMatch(token, peer.Token)
+		previousMatch := constantTokenMatch(token, peer.PreviousToken)
+		if (currentMatch && peer.Token != "" && peer.TokenExpiresAt.After(now)) ||
+			(previousMatch && peer.PreviousToken != "" && peer.PreviousTokenExpiresAt.After(now)) {
 			return true
 		}
 	}
@@ -147,6 +168,10 @@ func (m *Module) probePeers(ctx context.Context) {
 			return
 		}
 		if peer.Address == "" || peer.Port == 0 {
+			continue
+		}
+		if !peerTokenActive(peer, m.now()) {
+			m.setPeerHealth(peer.ID, "token_expired", nil)
 			continue
 		}
 		var response struct {
@@ -235,7 +260,7 @@ func (m *Module) forwardClipboardEvent(ctx context.Context, data any) {
 		return
 	}
 	for _, peer := range m.peerSnapshot() {
-		if peer.Address == "" || peer.Port == 0 || peer.Token == "" || !supports(peer.Capabilities, "clipboard.text.push") {
+		if peer.Address == "" || peer.Port == 0 || !peerTokenActive(peer, m.now()) || !supports(peer.Capabilities, "clipboard.text.push") {
 			continue
 		}
 		var job syncstore.Job
@@ -296,6 +321,7 @@ func (m *Module) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/devices/discovered", m.handleDiscovered)
 	mux.HandleFunc("GET /api/v1/devices/{id}", m.handleGet)
 	mux.HandleFunc("POST /api/v1/devices/pair", m.handlePair)
+	mux.HandleFunc("POST /api/v1/devices/{id}/token/rotate", m.handleRotateToken)
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", m.handleRevoke)
 }
 
@@ -312,8 +338,9 @@ func (m *Module) handleDiscovered(w http.ResponseWriter, _ *http.Request) {
 func (m *Module) handleList(w http.ResponseWriter, _ *http.Request) {
 	m.mu.RLock()
 	peers := make([]publicPeer, 0, len(m.peers))
+	now := m.now()
 	for _, peer := range m.peers {
-		peers = append(peers, toPublic(peer))
+		peers = append(peers, toPublic(peer, now))
 	}
 	m.mu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -331,7 +358,7 @@ func (m *Module) handleGet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "device not found", requestID(r))
 		return
 	}
-	writeJSON(w, http.StatusOK, toPublic(peer))
+	writeJSON(w, http.StatusOK, toPublic(peer, m.now()))
 }
 
 func (m *Module) handlePair(w http.ResponseWriter, r *http.Request) {
@@ -346,7 +373,7 @@ func (m *Module) handlePair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid pairing request", requestID(r))
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.Code)), []byte(m.security.PairingCode)) != 1 {
+	if !constantTokenMatch(strings.TrimSpace(req.Code), strings.TrimSpace(m.security.PairingCode)) {
 		writeError(w, http.StatusUnauthorized, "invalid pairing code", requestID(r))
 		return
 	}
@@ -359,39 +386,86 @@ func (m *Module) handlePair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to generate device token", requestID(r))
 		return
 	}
-	now := time.Now().UTC()
-	peer := Peer{ID: strings.TrimSpace(req.ID), Name: strings.TrimSpace(req.Name), Address: strings.TrimSpace(req.Address), Port: req.Port, Capabilities: cleanCapabilities(req.Capabilities), Status: "paired", PairedAt: now, LastSeen: now, Token: token}
+	now := m.now()
+	peer := Peer{ID: strings.TrimSpace(req.ID), Name: strings.TrimSpace(req.Name), Address: strings.TrimSpace(req.Address), Port: req.Port, Capabilities: cleanCapabilities(req.Capabilities), Status: "paired", PairedAt: now, LastSeen: now}
 	m.mu.Lock()
-	_, existed := m.peers[peer.ID]
+	old, existed := m.peers[peer.ID]
 	if !existed && len(m.peers) >= maxPeers {
 		m.mu.Unlock()
 		writeError(w, http.StatusInsufficientStorage, "device registry is full", requestID(r))
 		return
 	}
-	if old, ok := m.peers[peer.ID]; ok {
+	if existed {
 		peer.PairedAt = old.PairedAt
+		peer.Token = old.Token
+		peer.TokenIssuedAt = old.TokenIssuedAt
+		peer.TokenExpiresAt = old.TokenExpiresAt
+		peer.PreviousToken = old.PreviousToken
+		peer.PreviousTokenExpiresAt = old.PreviousTokenExpiresAt
 	}
+	peer = m.rotatePeer(peer, token, now)
 	m.peers[peer.ID] = peer
 	if err := m.saveLocked(); err != nil {
+		if existed {
+			m.peers[peer.ID] = old
+		} else {
+			delete(m.peers, peer.ID)
+		}
 		m.mu.Unlock()
 		writeError(w, http.StatusInternalServerError, "failed to persist device registry", requestID(r))
 		return
 	}
 	m.mu.Unlock()
 	m.logger.Info("device paired", "device_id", peer.ID, "address", peer.Address, "capability_count", len(peer.Capabilities), "rotated", existed)
-	writeJSON(w, http.StatusOK, map[string]any{"paired": true, "rotated": existed, "device": toPublic(peer), "token": token})
+	writeJSON(w, http.StatusOK, map[string]any{"paired": true, "rotated": existed, "device": toPublic(peer, now), "token": token})
+}
+
+func (m *Module) handleRotateToken(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	now := m.now()
+	m.mu.Lock()
+	old, ok := m.peers[id]
+	if !ok {
+		m.mu.Unlock()
+		writeError(w, http.StatusNotFound, "device not found", requestID(r))
+		return
+	}
+	if !m.canRotatePeer(r, old, now) {
+		m.mu.Unlock()
+		writeError(w, http.StatusForbidden, "token rotation requires local management, the management token, or this device's current token", requestID(r))
+		return
+	}
+	token, err := newToken()
+	if err != nil {
+		m.mu.Unlock()
+		writeError(w, http.StatusInternalServerError, "failed to generate device token", requestID(r))
+		return
+	}
+	peer := m.rotatePeer(old, token, now)
+	m.peers[id] = peer
+	if err := m.saveLocked(); err != nil {
+		m.peers[id] = old
+		m.mu.Unlock()
+		writeError(w, http.StatusInternalServerError, "failed to persist device registry", requestID(r))
+		return
+	}
+	m.mu.Unlock()
+	m.logger.Info("device token rotated", "device_id", id, "expires_at", peer.TokenExpiresAt)
+	writeJSON(w, http.StatusOK, map[string]any{"rotated": true, "device": toPublic(peer, now), "token": token})
 }
 
 func (m *Module) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	m.mu.Lock()
-	if _, ok := m.peers[id]; !ok {
+	old, ok := m.peers[id]
+	if !ok {
 		m.mu.Unlock()
 		writeError(w, http.StatusNotFound, "device not found", requestID(r))
 		return
 	}
 	delete(m.peers, id)
 	if err := m.saveLocked(); err != nil {
+		m.peers[id] = old
 		m.mu.Unlock()
 		writeError(w, http.StatusInternalServerError, "failed to persist device registry", requestID(r))
 		return
@@ -534,8 +608,72 @@ func cleanCapabilities(values []string) []string {
 	return result
 }
 
-func toPublic(peer Peer) publicPeer {
-	return publicPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen}
+func toPublic(peer Peer, now time.Time) publicPeer {
+	status := peer.Status
+	if peer.Token == "" {
+		status = "repair_required"
+	} else if !peer.TokenExpiresAt.After(now) {
+		status = "token_expired"
+	}
+	public := publicPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen}
+	if !peer.TokenIssuedAt.IsZero() {
+		issuedAt := peer.TokenIssuedAt
+		public.TokenIssuedAt = &issuedAt
+	}
+	if !peer.TokenExpiresAt.IsZero() {
+		expiresAt := peer.TokenExpiresAt
+		public.TokenExpiresAt = &expiresAt
+	}
+	return public
+}
+
+func (m *Module) rotatePeer(peer Peer, token string, now time.Time) Peer {
+	if peer.Token != "" && peer.TokenExpiresAt.After(now) && m.security.TokenOverlapTTL > 0 {
+		peer.PreviousToken = peer.Token
+		peer.PreviousTokenExpiresAt = now.Add(m.security.TokenOverlapTTL)
+		if peer.TokenExpiresAt.Before(peer.PreviousTokenExpiresAt) {
+			peer.PreviousTokenExpiresAt = peer.TokenExpiresAt
+		}
+	} else {
+		peer.PreviousToken = ""
+		peer.PreviousTokenExpiresAt = time.Time{}
+	}
+	peer.Token = token
+	peer.TokenIssuedAt = now
+	peer.TokenExpiresAt = now.Add(m.security.PeerTokenTTL)
+	peer.Status = "paired"
+	return peer
+}
+
+func peerTokenActive(peer Peer, now time.Time) bool {
+	return peer.Token != "" && peer.TokenExpiresAt.After(now)
+}
+
+func (m *Module) canRotatePeer(r *http.Request, peer Peer, now time.Time) bool {
+	if requestFromLoopback(r) {
+		return true
+	}
+	const prefix = "Bearer "
+	provided := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(provided) <= len(prefix) || !strings.EqualFold(provided[:len(prefix)], prefix) {
+		return false
+	}
+	provided = strings.TrimSpace(provided[len(prefix):])
+	if constantTokenMatch(provided, strings.TrimSpace(m.security.BearerToken)) {
+		return true
+	}
+	return (peer.TokenExpiresAt.After(now) && constantTokenMatch(provided, peer.Token)) ||
+		(peer.PreviousTokenExpiresAt.After(now) && constantTokenMatch(provided, peer.PreviousToken))
+}
+
+func requestFromLoopback(r *http.Request) bool {
+	host := strings.TrimSpace(r.RemoteAddr)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func newToken() (string, error) {
@@ -546,6 +684,12 @@ func newToken() (string, error) {
 	return hex.EncodeToString(raw[:]), nil
 }
 
+func constantTokenMatch(candidate, stored string) bool {
+	candidateDigest := sha256.Sum256([]byte(candidate))
+	storedDigest := sha256.Sum256([]byte(stored))
+	return stored != "" && subtle.ConstantTimeCompare(candidateDigest[:], storedDigest[:]) == 1
+}
+
 func (m *Module) load() error {
 	file, err := os.Open(m.cfg.RegistryPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -554,10 +698,13 @@ func (m *Module) load() error {
 	if err != nil {
 		return fmt.Errorf("read device registry: %w", err)
 	}
-	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxRegistryBytes+1))
+	closeErr := file.Close()
 	if err != nil {
 		return fmt.Errorf("read device registry: %w", err)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close device registry: %w", closeErr)
 	}
 	if len(data) > maxRegistryBytes {
 		return fmt.Errorf("device registry exceeds %d bytes", maxRegistryBytes)
@@ -566,23 +713,33 @@ func (m *Module) load() error {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return fmt.Errorf("parse device registry: %w", err)
 	}
-	if state.Version != registryVersion {
+	if state.Version != 1 && state.Version != registryVersion {
 		return fmt.Errorf("unsupported device registry version: %d", state.Version)
 	}
-	for _, peer := range state.Peers {
+	for _, stored := range state.Peers {
+		peer := peerFromPersisted(stored)
 		if peer.ID == "" || peer.ID == m.cfg.ID {
 			continue
 		}
+		if peer.Token == "" {
+			peer.Status = "repair_required"
+		}
 		m.peers[peer.ID] = peer
+	}
+	if state.Version == 1 {
+		if err := m.saveLocked(); err != nil {
+			return fmt.Errorf("migrate device registry: %w", err)
+		}
 	}
 	return nil
 }
 
 func (m *Module) saveLocked() error {
-	peers := make([]Peer, 0, len(m.peers))
+	peers := make([]persistedPeer, 0, len(m.peers))
 	for _, peer := range m.peers {
-		peers = append(peers, peer)
+		peers = append(peers, persistedFromPeer(peer))
 	}
+	sort.Slice(peers, func(i, j int) bool { return peers[i].ID < peers[j].ID })
 	data, err := json.MarshalIndent(registryFile{Version: registryVersion, Peers: peers}, "", "  ")
 	if err != nil {
 		return err
@@ -594,7 +751,44 @@ func (m *Module) saveLocked() error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create device registry directory: %w", err)
 	}
-	return os.WriteFile(m.cfg.RegistryPath, append(data, '\n'), 0600)
+	tmp, err := os.CreateTemp(dir, ".localbridge-devices-*")
+	if err != nil {
+		return fmt.Errorf("create device registry temporary file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("protect device registry temporary file: %w", err)
+	}
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write device registry: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("sync device registry: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close device registry: %w", err)
+	}
+	if err := os.Rename(tmpName, m.cfg.RegistryPath); err != nil {
+		if removeErr := os.Remove(m.cfg.RegistryPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return fmt.Errorf("replace device registry: %w (remove existing: %v)", err, removeErr)
+		}
+		if err := os.Rename(tmpName, m.cfg.RegistryPath); err != nil {
+			return fmt.Errorf("replace device registry after removing existing: %w", err)
+		}
+	}
+	return nil
+}
+
+func persistedFromPeer(peer Peer) persistedPeer {
+	return persistedPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+}
+
+func peerFromPersisted(peer persistedPeer) Peer {
+	return Peer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

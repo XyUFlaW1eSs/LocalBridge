@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDecodeJSON(t *testing.T) {
@@ -35,6 +36,8 @@ device:
 security:
   auth_enabled: true
   bearer_token: "0123456789abcdef"
+  peer_token_ttl: 48h
+  token_overlap_ttl: 2m
 discovery:
   enabled: true
   port: 8898
@@ -54,7 +57,16 @@ logging:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Server.Port != 9999 || cfg.Device.ID != "test-pc" || cfg.Clipboard.MaxTextBytes != 42 || cfg.Logging.Format != "json" || !cfg.Security.AuthEnabled || !cfg.Discovery.Enabled || cfg.Discovery.Port != 8898 {
+	if cfg.Server.Port != 9999 || cfg.Device.ID != "test-pc" || cfg.Clipboard.MaxTextBytes != 42 || cfg.Logging.Format != "json" || !cfg.Security.AuthEnabled || cfg.Security.PeerTokenTTL != 48*time.Hour || cfg.Security.TokenOverlapTTL != 2*time.Minute || !cfg.Discovery.Enabled || cfg.Discovery.Port != 8898 {
 		t.Fatalf("unexpected config: %#v", cfg)
+	}
+}
+
+func TestRejectsPeerTokenOverlapAtOrBeyondTTL(t *testing.T) {
+	cfg := Default()
+	cfg.Security.PeerTokenTTL = time.Hour
+	cfg.Security.TokenOverlapTTL = time.Hour
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("token overlap equal to token TTL was accepted")
 	}
 }

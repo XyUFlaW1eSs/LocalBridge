@@ -39,9 +39,11 @@ type DeviceConfig struct {
 }
 
 type SecurityConfig struct {
-	AuthEnabled bool   `yaml:"auth_enabled" json:"auth_enabled"`
-	BearerToken string `yaml:"bearer_token" json:"bearer_token"`
-	PairingCode string `yaml:"pairing_code" json:"pairing_code"`
+	AuthEnabled     bool          `yaml:"auth_enabled" json:"auth_enabled"`
+	BearerToken     string        `yaml:"bearer_token" json:"bearer_token"`
+	PairingCode     string        `yaml:"pairing_code" json:"pairing_code"`
+	PeerTokenTTL    time.Duration `yaml:"peer_token_ttl" json:"peer_token_ttl"`
+	TokenOverlapTTL time.Duration `yaml:"token_overlap_ttl" json:"token_overlap_ttl"`
 }
 
 type DiscoveryConfig struct {
@@ -91,7 +93,7 @@ func Default() Config {
 	return Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json", HealthInterval: 30 * time.Second},
-		Security:  SecurityConfig{},
+		Security:  SecurityConfig{PeerTokenTTL: 30 * 24 * time.Hour, TokenOverlapTTL: 10 * time.Minute},
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Sync:      SyncConfig{Enabled: true, StorePath: "data/sync-jobs.json", MaxJobs: 1000, JobRetention: 7 * 24 * time.Hour},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
@@ -210,6 +212,18 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Security.BearerToken = value
 	case "security.pairing_code":
 		cfg.Security.PairingCode = value
+	case "security.peer_token_ttl":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid security.peer_token_ttl: %w", err)
+		}
+		cfg.Security.PeerTokenTTL = v
+	case "security.token_overlap_ttl":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid security.token_overlap_ttl: %w", err)
+		}
+		cfg.Security.TokenOverlapTTL = v
 	case "discovery.enabled":
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -338,6 +352,12 @@ func (c Config) Validate() error {
 	}
 	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
 		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")
+	}
+	if c.Security.PeerTokenTTL < 0 || c.Security.TokenOverlapTTL < 0 {
+		return errors.New("security peer token durations must not be negative")
+	}
+	if c.Security.PeerTokenTTL > 0 && c.Security.TokenOverlapTTL >= c.Security.PeerTokenTTL {
+		return errors.New("security.token_overlap_ttl must be shorter than peer_token_ttl")
 	}
 	if c.Discovery.Port < 1 || c.Discovery.Port > 65535 {
 		return fmt.Errorf("discovery.port must be between 1 and 65535: %d", c.Discovery.Port)

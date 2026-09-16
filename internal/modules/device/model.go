@@ -3,15 +3,19 @@ package device
 import "time"
 
 type Peer struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Address      string    `json:"address,omitempty"`
-	Port         int       `json:"port,omitempty"`
-	Capabilities []string  `json:"capabilities,omitempty"`
-	Status       string    `json:"status"`
-	PairedAt     time.Time `json:"paired_at"`
-	LastSeen     time.Time `json:"last_seen"`
-	Token        string    `json:"-"`
+	ID                     string    `json:"id"`
+	Name                   string    `json:"name"`
+	Address                string    `json:"address,omitempty"`
+	Port                   int       `json:"port,omitempty"`
+	Capabilities           []string  `json:"capabilities,omitempty"`
+	Status                 string    `json:"status"`
+	PairedAt               time.Time `json:"paired_at"`
+	LastSeen               time.Time `json:"last_seen"`
+	Token                  string    `json:"-"`
+	TokenIssuedAt          time.Time `json:"-"`
+	TokenExpiresAt         time.Time `json:"-"`
+	PreviousToken          string    `json:"-"`
+	PreviousTokenExpiresAt time.Time `json:"-"`
 }
 
 type DiscoveredPeer struct {
@@ -34,19 +38,37 @@ type pairRequest struct {
 }
 
 type publicPeer struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Address      string    `json:"address,omitempty"`
-	Port         int       `json:"port,omitempty"`
-	Capabilities []string  `json:"capabilities,omitempty"`
-	Status       string    `json:"status"`
-	PairedAt     time.Time `json:"paired_at"`
-	LastSeen     time.Time `json:"last_seen"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Address        string     `json:"address,omitempty"`
+	Port           int        `json:"port,omitempty"`
+	Capabilities   []string   `json:"capabilities,omitempty"`
+	Status         string     `json:"status"`
+	PairedAt       time.Time  `json:"paired_at"`
+	LastSeen       time.Time  `json:"last_seen"`
+	TokenIssuedAt  *time.Time `json:"token_issued_at,omitempty"`
+	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
+}
+
+type persistedPeer struct {
+	ID                     string    `json:"id"`
+	Name                   string    `json:"name"`
+	Address                string    `json:"address,omitempty"`
+	Port                   int       `json:"port,omitempty"`
+	Capabilities           []string  `json:"capabilities,omitempty"`
+	Status                 string    `json:"status"`
+	PairedAt               time.Time `json:"paired_at"`
+	LastSeen               time.Time `json:"last_seen"`
+	Token                  string    `json:"token"`
+	TokenIssuedAt          time.Time `json:"token_issued_at"`
+	TokenExpiresAt         time.Time `json:"token_expires_at"`
+	PreviousToken          string    `json:"previous_token,omitempty"`
+	PreviousTokenExpiresAt time.Time `json:"previous_token_expires_at,omitempty"`
 }
 
 type registryFile struct {
-	Version int    `json:"version"`
-	Peers   []Peer `json:"peers"`
+	Version int             `json:"version"`
+	Peers   []persistedPeer `json:"peers"`
 }
 
 type discoveryAnnouncement struct {

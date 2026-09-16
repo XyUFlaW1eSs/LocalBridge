@@ -16,6 +16,8 @@ security:
   auth_enabled: false
   bearer_token: ""
   pairing_code: ""
+  peer_token_ttl: 720h
+  token_overlap_ttl: 10m
 
 discovery:
   # Discovery is an unauthenticated reachability hint; pairing still grants trust.

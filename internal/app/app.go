@@ -63,7 +63,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 			return nil, err
 		}
 	}
-	capabilities := []string{"system.health", "system.capabilities", "device.registry", "device.pairing", "device.discovery"}
+	capabilities := []string{"system.health", "system.capabilities", "device.registry", "device.pairing", "device.discovery", "device.token.rotate"}
 	if cfg.Sync.Enabled {
 		capabilities = append(capabilities, "sync.jobs")
 	}
