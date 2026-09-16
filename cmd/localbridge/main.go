@@ -16,6 +16,7 @@ import (
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/app"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/credentials"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/diagnostics"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/native"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
@@ -29,6 +30,8 @@ func main() {
 	checkConfig := flag.Bool("check-config", false, "validate configuration and print redacted effective values")
 	shareFiles := flag.Bool("share", false, "share file arguments through LocalBridge")
 	supportBundle := flag.String("support-bundle", "", "write a redacted diagnostics ZIP to this path and exit")
+	credentialAction := flag.String("credential-action", "", "credential operation: set, delete, or status")
+	credentialName := flag.String("credential-name", "", "credential reference name for the operation")
 	flag.Parse()
 	if *showVersion {
 		println("LocalBridge", version.Value)
@@ -45,6 +48,18 @@ func main() {
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
+	}
+	if *credentialAction != "" {
+		code, err := runCredentialOperation(cfg, *credentialAction, *credentialName, credentials.NewPlatformProtector(), func() ([]byte, error) {
+			return readSecret(os.Stdin, os.Stderr)
+		}, os.Stdout)
+		if err != nil {
+			slog.Error("credential operation failed", "error", err)
+		}
+		if code != 0 {
+			os.Exit(code)
+		}
+		return
 	}
 	if *supportBundle != "" {
 		if err := diagnostics.Create(*supportBundle, cfg, version.Value); err != nil {
@@ -114,6 +129,70 @@ func main() {
 		os.Exit(1)
 	}
 	runtime.Logger().Info("LocalBridge stopped")
+}
+
+func runCredentialOperation(cfg config.Config, action, name string, protector credentials.Protector, input func() ([]byte, error), output io.Writer) (int, error) {
+	if action != "set" && action != "delete" && action != "status" {
+		return 2, fmt.Errorf("credential action must be set, delete, or status")
+	}
+	if err := credentials.ValidateName(name); err != nil {
+		return 2, err
+	}
+	protection, err := credentials.ResolveProtection(cfg.Security.CredentialProtection, protector)
+	if err != nil {
+		return 1, err
+	}
+	if !protection.Enabled {
+		return 1, fmt.Errorf("credential operations require protected credential storage")
+	}
+	store, err := credentials.NewStore(cfg.Security.CredentialStorePath, protection.Protector)
+	if err != nil {
+		return 1, err
+	}
+	switch action {
+	case "set":
+		secret, err := input()
+		if err != nil {
+			return 1, fmt.Errorf("read credential from terminal or stdin: %w", err)
+		}
+		defer func() {
+			for i := range secret {
+				secret[i] = 0
+			}
+		}()
+		if err := store.Set(name, secret); err != nil {
+			return 1, err
+		}
+		fmt.Fprintf(output, "credential %q stored with %s\n", name, protection.Effective)
+	case "delete":
+		deleted, err := store.Delete(name)
+		if err != nil {
+			return 1, err
+		}
+		status := "not present"
+		if deleted {
+			status = "deleted"
+		}
+		fmt.Fprintf(output, "credential %q: %s\n", name, status)
+	case "status":
+		present, err := store.Has(name)
+		if err != nil {
+			return 1, err
+		}
+		if !present {
+			fmt.Fprintf(output, "credential %q: missing (%s)\n", name, protection.Effective)
+			return 0, nil
+		}
+		secret, err := store.Get(name)
+		if err != nil {
+			return 1, err
+		}
+		for i := range secret {
+			secret[i] = 0
+		}
+		fmt.Fprintf(output, "credential %q: present (%s)\n", name, protection.Effective)
+	}
+	return 0, nil
 }
 
 func shareViaRunningService(cfg config.Config, paths []string) (bool, error) {

@@ -1,8 +1,11 @@
 package device
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,6 +23,26 @@ import (
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 )
+
+type registryTestProtector struct {
+	failProtect bool
+}
+
+func (registryTestProtector) Name() string    { return "test-protector" }
+func (registryTestProtector) Available() bool { return true }
+func (p registryTestProtector) Protect(purpose string, plaintext []byte) ([]byte, error) {
+	if p.failProtect {
+		return nil, errors.New("injected protection failure")
+	}
+	return append(append([]byte(purpose), 0), plaintext...), nil
+}
+func (registryTestProtector) Unprotect(purpose string, ciphertext []byte) ([]byte, error) {
+	prefix := append([]byte(purpose), 0)
+	if !bytes.HasPrefix(ciphertext, prefix) {
+		return nil, errors.New("purpose mismatch or damaged ciphertext")
+	}
+	return append([]byte(nil), ciphertext[len(prefix):]...), nil
+}
 
 func TestPairListAndRevoke(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.json")
@@ -191,7 +214,7 @@ func TestRegistryV1MigratesMissingTokensToRepairRequired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"version": 3`) || !strings.Contains(string(data), `"scheme": "http"`) {
+	if !strings.Contains(string(data), `"version": 4`) || !strings.Contains(string(data), `"scheme": "http"`) {
 		t.Fatalf("legacy registry was not migrated: %s", data)
 	}
 }
@@ -210,8 +233,132 @@ func TestRegistryV2MigratesPeersToExplicitLegacyHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, `"version": 3`) || !strings.Contains(text, `"secure": false`) || !strings.Contains(text, `"scheme": "http"`) {
+	if !strings.Contains(text, `"version": 4`) || !strings.Contains(text, `"secure": false`) || !strings.Contains(text, `"scheme": "http"`) {
 		t.Fatalf("v2 registry did not migrate as legacy HTTP: %s", text)
+	}
+}
+
+func TestRegistryV3MigratesToProtectedV4AndRestarts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	currentToken := "current-peer-token-secret"
+	previousToken := "previous-peer-token-secret"
+	legacy := `{"version":3,"peers":[{"id":"phone","name":"Phone","status":"paired","secure":false,"scheme":"http","token":"` + currentToken + `","token_issued_at":"2026-01-01T00:00:00Z","token_expires_at":"2099-01-01T00:00:00Z","previous_token":"` + previousToken + `","previous_token_expires_at":"2099-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	protector := registryTestProtector{}
+	newProtected := func() (*Module, error) {
+		return NewWithProtector(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), protector, true)
+	}
+	m, err := newProtected()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.ValidatePeerToken(currentToken) || !m.ValidatePeerToken(previousToken) {
+		t.Fatal("migrated tokens were not available in memory")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, currentToken) || strings.Contains(text, previousToken) || strings.Contains(text, `"token":`) || strings.Contains(text, `"previous_token":`) {
+		t.Fatalf("protected registry contains plaintext token fields: %s", text)
+	}
+	if !strings.Contains(text, `"version": 4`) || !strings.Contains(text, `"credential_protection": "test-protector"`) || !strings.Contains(text, `"token_ciphertext"`) || !strings.Contains(text, `"previous_token_ciphertext"`) {
+		t.Fatalf("registry was not upgraded to protected v4: %s", text)
+	}
+	reloaded, err := newProtected()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloaded.ValidatePeerToken(currentToken) || !reloaded.ValidatePeerToken(previousToken) {
+		t.Fatal("protected tokens did not survive restart")
+	}
+}
+
+func TestProtectedRegistryRotationPersistsTwoCiphertexts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	security := config.SecurityConfig{PairingCode: "pair-me", PeerTokenTTL: time.Hour, TokenOverlapTTL: 5 * time.Minute}
+	m, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", Name: "Windows", RegistryPath: path}, security, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	m.Routes(mux)
+	pair := httptest.NewRecorder()
+	mux.ServeHTTP(pair, httptest.NewRequest(http.MethodPost, "/api/v1/devices/pair", strings.NewReader(`{"code":"pair-me","id":"phone","name":"Phone"}`)))
+	if pair.Code != http.StatusOK {
+		t.Fatalf("pair failed: %s", pair.Body.String())
+	}
+	var initial struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(pair.Body.Bytes(), &initial); err != nil {
+		t.Fatal(err)
+	}
+	rotate := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/devices/phone/token/rotate", nil)
+	request.Header.Set("Authorization", "Bearer "+initial.Token)
+	mux.ServeHTTP(rotate, request)
+	if rotate.Code != http.StatusOK {
+		t.Fatalf("rotate failed: %s", rotate.Body.String())
+	}
+	var rotated struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rotate.Body.Bytes(), &rotated); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, initial.Token) || strings.Contains(text, rotated.Token) || strings.Contains(text, `"token":`) || strings.Contains(text, `"previous_token":`) {
+		t.Fatal("token rotation wrote plaintext to protected registry")
+	}
+	if strings.Count(text, `token_ciphertext`) != 2 {
+		t.Fatalf("expected current and previous ciphertexts: %s", text)
+	}
+}
+
+func TestRegistryMigrationProtectionFailurePreservesOriginal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	legacy := []byte(`{"version":3,"peers":[{"id":"phone","name":"Phone","status":"paired","token":"plaintext-token","token_expires_at":"2099-01-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(path, legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{failProtect: true}, true)
+	if err == nil {
+		t.Fatal("expected migration protection failure")
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(after, legacy) {
+		t.Fatal("failed migration changed the original v3 registry")
+	}
+}
+
+func TestDamagedProtectedRegistryFailsClosedWithoutRewrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	bad := base64.StdEncoding.EncodeToString([]byte("damaged"))
+	data := []byte(`{"version":4,"credential_protection":"test-protector","peers":[{"id":"phone","name":"Phone","status":"paired","token_ciphertext":"` + bad + `","token_expires_at":"2099-01-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{}, true)
+	if err == nil {
+		t.Fatal("damaged protected token was accepted")
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(after, data) {
+		t.Fatal("damaged registry was rewritten")
 	}
 }
 

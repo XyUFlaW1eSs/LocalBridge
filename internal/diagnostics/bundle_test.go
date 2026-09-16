@@ -35,6 +35,9 @@ func TestCreateWritesRedactedSupportBundle(t *testing.T) {
 	cfg.Security.AuthEnabled = true
 	cfg.Security.BearerToken = "management-secret-value"
 	cfg.Security.PairingCode = "pairing-secret-value"
+	cfg.Security.BearerTokenRef = ""
+	cfg.Security.PairingCodeRef = ""
+	cfg.Security.CredentialStorePath = filepath.Join(dir, "private-credentials.json")
 	cfg.Server.TLSEnabled = true
 	cfg.Server.TLSCertFile = certPath
 	cfg.Server.TLSKeyFile = keyPath
@@ -61,7 +64,7 @@ func TestCreateWritesRedactedSupportBundle(t *testing.T) {
 	for _, privateValue := range []string{
 		cfg.Device.ID, cfg.Device.Name, cfg.Device.RegistryPath, cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile,
 		cfg.Security.BearerToken, cfg.Security.PairingCode, cfg.Sync.StorePath, cfg.Files.StorePath,
-		cfg.Files.ShareDir, cfg.Files.ReceiveDir, cfg.Settings.StorePath, "peer-secret-value", secretState,
+		cfg.Security.CredentialStorePath, cfg.Files.ShareDir, cfg.Files.ReceiveDir, cfg.Settings.StorePath, "peer-secret-value", secretState,
 		"CERTIFICATE BODY", "PRIVATE KEY BODY",
 	} {
 		if strings.Contains(string(diagnosticsJSON), privateValue) {
@@ -80,6 +83,9 @@ func TestCreateWritesRedactedSupportBundle(t *testing.T) {
 	}
 	if !report.Configuration.Security.AuthenticationEnabled || !report.Configuration.Security.ManagementTokenConfigured || !report.Configuration.Security.PairingCodeConfigured {
 		t.Fatalf("security configuration presence was not preserved: %#v", report.Configuration.Security)
+	}
+	if !report.Configuration.Security.CredentialStoreConfigured || report.Configuration.Security.ProtectionMode != "auto" || report.Configuration.Security.ProtectionEffective == "" {
+		t.Fatalf("credential protection metadata missing: %#v", report.Configuration.Security)
 	}
 	if got := stateFile(report, "device_registry"); got.Status != "present" || got.SizeBytes == 0 || got.ModifiedAt == nil {
 		t.Fatalf("unexpected registry metadata: %#v", got)

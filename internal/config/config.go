@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -62,11 +64,15 @@ type DeviceConfig struct {
 }
 
 type SecurityConfig struct {
-	AuthEnabled     bool          `yaml:"auth_enabled" json:"auth_enabled"`
-	BearerToken     string        `yaml:"bearer_token" json:"bearer_token"`
-	PairingCode     string        `yaml:"pairing_code" json:"pairing_code"`
-	PeerTokenTTL    time.Duration `yaml:"peer_token_ttl" json:"peer_token_ttl"`
-	TokenOverlapTTL time.Duration `yaml:"token_overlap_ttl" json:"token_overlap_ttl"`
+	AuthEnabled          bool          `yaml:"auth_enabled" json:"auth_enabled"`
+	BearerToken          string        `yaml:"bearer_token" json:"bearer_token"`
+	BearerTokenRef       string        `yaml:"bearer_token_ref" json:"bearer_token_ref"`
+	PairingCode          string        `yaml:"pairing_code" json:"pairing_code"`
+	PairingCodeRef       string        `yaml:"pairing_code_ref" json:"pairing_code_ref"`
+	CredentialProtection string        `yaml:"credential_protection" json:"credential_protection"`
+	CredentialStorePath  string        `yaml:"credential_store_path" json:"credential_store_path"`
+	PeerTokenTTL         time.Duration `yaml:"peer_token_ttl" json:"peer_token_ttl"`
+	TokenOverlapTTL      time.Duration `yaml:"token_overlap_ttl" json:"token_overlap_ttl"`
 }
 
 type DiscoveryConfig struct {
@@ -117,7 +123,7 @@ func Default() Config {
 		Version:   CurrentVersion,
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8899, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second},
 		Device:    DeviceConfig{ID: "windows-pc", Name: "LocalBridge Windows", RegistryPath: "data/devices.json", HealthInterval: 30 * time.Second},
-		Security:  SecurityConfig{PeerTokenTTL: 30 * 24 * time.Hour, TokenOverlapTTL: 10 * time.Minute},
+		Security:  SecurityConfig{CredentialProtection: "auto", CredentialStorePath: "data/credentials.json", PeerTokenTTL: 30 * 24 * time.Hour, TokenOverlapTTL: 10 * time.Minute},
 		Discovery: DiscoveryConfig{Port: 8898, AnnounceInterval: 10 * time.Second},
 		Sync:      SyncConfig{Enabled: true, StorePath: "data/sync-jobs.json", MaxJobs: 1000, JobRetention: 7 * 24 * time.Hour},
 		Clipboard: ClipboardConfig{Enabled: true, MaxTextBytes: 1024 * 1024, WatchInterval: 300 * time.Millisecond},
@@ -357,8 +363,16 @@ func setValue(cfg *Config, section, key, value string) error {
 		cfg.Security.AuthEnabled = v
 	case "security.bearer_token":
 		cfg.Security.BearerToken = value
+	case "security.bearer_token_ref":
+		cfg.Security.BearerTokenRef = value
 	case "security.pairing_code":
 		cfg.Security.PairingCode = value
+	case "security.pairing_code_ref":
+		cfg.Security.PairingCodeRef = value
+	case "security.credential_protection":
+		cfg.Security.CredentialProtection = value
+	case "security.credential_store_path":
+		cfg.Security.CredentialStorePath = value
 	case "security.peer_token_ttl":
 		v, err := time.ParseDuration(value)
 		if err != nil {
@@ -507,7 +521,34 @@ func (c Config) Validate() error {
 	if c.Device.HealthInterval < 0 {
 		return errors.New("device.health_interval must not be negative")
 	}
-	if c.Security.AuthEnabled && len(c.Security.BearerToken) < 16 {
+	mode := strings.TrimSpace(c.Security.CredentialProtection)
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode != "auto" && mode != "required" && mode != "disabled" {
+		return fmt.Errorf("security.credential_protection must be auto, required, or disabled: %q", mode)
+	}
+	if mode != "disabled" && strings.TrimSpace(c.Security.CredentialStorePath) == "" {
+		return errors.New("security.credential_store_path must not be empty when credential protection is enabled")
+	}
+	if strings.TrimSpace(c.Security.BearerToken) != "" && strings.TrimSpace(c.Security.BearerTokenRef) != "" {
+		return errors.New("security.bearer_token and security.bearer_token_ref must not both be set")
+	}
+	if strings.TrimSpace(c.Security.PairingCode) != "" && strings.TrimSpace(c.Security.PairingCodeRef) != "" {
+		return errors.New("security.pairing_code and security.pairing_code_ref must not both be set")
+	}
+	for field, ref := range map[string]string{"bearer_token_ref": c.Security.BearerTokenRef, "pairing_code_ref": c.Security.PairingCodeRef} {
+		if strings.TrimSpace(ref) != "" && !credentialReferencePattern.MatchString(ref) {
+			return fmt.Errorf("security.%s must match %s", field, credentialReferencePattern.String())
+		}
+	}
+	if mode == "disabled" && (strings.TrimSpace(c.Security.BearerTokenRef) != "" || strings.TrimSpace(c.Security.PairingCodeRef) != "") {
+		return errors.New("credential references cannot be used when security.credential_protection is disabled")
+	}
+	if mode == "required" && (strings.TrimSpace(c.Security.BearerToken) != "" || strings.TrimSpace(c.Security.PairingCode) != "") {
+		return errors.New("inline secrets are not allowed when security.credential_protection is required")
+	}
+	if c.Security.AuthEnabled && strings.TrimSpace(c.Security.BearerTokenRef) == "" && len(c.Security.BearerToken) < 16 {
 		return errors.New("security.bearer_token must contain at least 16 characters when authentication is enabled")
 	}
 	if c.Security.PeerTokenTTL < 0 || c.Security.TokenOverlapTTL < 0 {
@@ -592,9 +633,9 @@ func (c Config) Diagnostics() Diagnostics {
 				"health_interval": c.Device.HealthInterval.String(),
 			},
 			"security": map[string]any{
-				"auth_enabled": c.Security.AuthEnabled, "bearer_token_configured": strings.TrimSpace(c.Security.BearerToken) != "",
-				"pairing_code_configured": strings.TrimSpace(c.Security.PairingCode) != "", "peer_token_ttl": c.Security.PeerTokenTTL.String(),
-				"token_overlap_ttl": c.Security.TokenOverlapTTL.String(),
+				"auth_enabled": c.Security.AuthEnabled, "bearer_token_configured": strings.TrimSpace(c.Security.BearerToken) != "" || strings.TrimSpace(c.Security.BearerTokenRef) != "",
+				"pairing_code_configured": strings.TrimSpace(c.Security.PairingCode) != "" || strings.TrimSpace(c.Security.PairingCodeRef) != "", "peer_token_ttl": c.Security.PeerTokenTTL.String(),
+				"token_overlap_ttl": c.Security.TokenOverlapTTL.String(), "credential_protection": credentialProtectionDiagnostics(c.Security),
 			},
 			"discovery": map[string]any{
 				"enabled": c.Discovery.Enabled, "port": c.Discovery.Port, "announce_interval": c.Discovery.AnnounceInterval.String(),
@@ -617,6 +658,38 @@ func (c Config) Diagnostics() Diagnostics {
 			"logging":  map[string]any{"level": c.Logging.Level, "format": c.Logging.Format},
 		},
 	}
+}
+
+var credentialReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
+
+func credentialProtectionDiagnostics(security SecurityConfig) map[string]any {
+	mode := strings.TrimSpace(security.CredentialProtection)
+	if mode == "" {
+		mode = "auto"
+	}
+	effective := "unsupported"
+	supported := runtime.GOOS == "windows"
+	if mode == "disabled" {
+		effective = "disabled"
+	} else if supported {
+		effective = "dpapi-current-user"
+	}
+	return map[string]any{
+		"mode": mode, "effective": effective, "platform_supported": supported,
+		"store_configured":        strings.TrimSpace(security.CredentialStorePath) != "",
+		"management_token_source": secretSource(security.BearerToken, security.BearerTokenRef),
+		"pairing_code_source":     secretSource(security.PairingCode, security.PairingCodeRef),
+	}
+}
+
+func secretSource(inline, reference string) string {
+	if strings.TrimSpace(reference) != "" {
+		return "reference"
+	}
+	if strings.TrimSpace(inline) != "" {
+		return "inline"
+	}
+	return "none"
 }
 
 func (c ServerConfig) Address() string { return fmt.Sprintf("%s:%d", c.Host, c.Port) }

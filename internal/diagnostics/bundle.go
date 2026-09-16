@@ -65,9 +65,13 @@ type DeviceReport struct {
 }
 
 type SecurityReport struct {
-	AuthenticationEnabled     bool `json:"authentication_enabled"`
-	ManagementTokenConfigured bool `json:"management_token_configured"`
-	PairingCodeConfigured     bool `json:"pairing_code_configured"`
+	AuthenticationEnabled     bool   `json:"authentication_enabled"`
+	ManagementTokenConfigured bool   `json:"management_token_configured"`
+	PairingCodeConfigured     bool   `json:"pairing_code_configured"`
+	CredentialStoreConfigured bool   `json:"credential_store_configured"`
+	ProtectionMode            string `json:"credential_protection_mode"`
+	ProtectionEffective       string `json:"credential_protection_effective"`
+	ProtectionSupported       bool   `json:"credential_protection_supported"`
 }
 
 type DiscoveryReport struct {
@@ -184,8 +188,12 @@ func buildReport(cfg config.Config, applicationVersion string, generatedAt time.
 			Device: DeviceReport{HealthInterval: cfg.Device.HealthInterval.String()},
 			Security: SecurityReport{
 				AuthenticationEnabled:     cfg.Security.AuthEnabled,
-				ManagementTokenConfigured: strings.TrimSpace(cfg.Security.BearerToken) != "",
-				PairingCodeConfigured:     strings.TrimSpace(cfg.Security.PairingCode) != "",
+				ManagementTokenConfigured: strings.TrimSpace(cfg.Security.BearerToken) != "" || strings.TrimSpace(cfg.Security.BearerTokenRef) != "",
+				PairingCodeConfigured:     strings.TrimSpace(cfg.Security.PairingCode) != "" || strings.TrimSpace(cfg.Security.PairingCodeRef) != "",
+				CredentialStoreConfigured: strings.TrimSpace(cfg.Security.CredentialStorePath) != "",
+				ProtectionMode:            protectionMode(cfg.Security.CredentialProtection),
+				ProtectionEffective:       protectionEffective(cfg.Security.CredentialProtection),
+				ProtectionSupported:       runtime.GOOS == "windows",
 			},
 			Discovery: DiscoveryReport{Enabled: cfg.Discovery.Enabled, Port: cfg.Discovery.Port, AnnounceInterval: cfg.Discovery.AnnounceInterval.String()},
 			Sync:      SyncReport{Enabled: cfg.Sync.Enabled, MaxJobs: cfg.Sync.MaxJobs, JobRetention: cfg.Sync.JobRetention.String()},
@@ -194,12 +202,31 @@ func buildReport(cfg config.Config, applicationVersion string, generatedAt time.
 			Logging:   LoggingReport{Level: cfg.Logging.Level, Format: cfg.Logging.Format},
 		},
 		StateFiles: []StateFileReport{
+			inspectStateFile("credential_store", cfg.Security.CredentialStorePath),
 			inspectStateFile("device_registry", cfg.Device.RegistryPath),
 			inspectStateFile("sync_jobs", cfg.Sync.StorePath),
 			inspectStateFile("file_transfers", cfg.Files.StorePath),
 			inspectStateFile("settings", cfg.Settings.StorePath),
 		},
 	}
+}
+
+func protectionMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return "auto"
+	}
+	return mode
+}
+
+func protectionEffective(mode string) string {
+	if protectionMode(mode) == "disabled" {
+		return "disabled"
+	}
+	if runtime.GOOS == "windows" {
+		return "dpapi-current-user"
+	}
+	return "unsupported"
 }
 
 func inspectStateFile(kind, path string) StateFileReport {

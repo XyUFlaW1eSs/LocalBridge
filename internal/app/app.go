@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/credentials"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/logger"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/module"
@@ -39,6 +40,7 @@ type App struct {
 type Options struct {
 	ConfigPath string
 	Executable string
+	Protector  credentials.Protector
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -47,6 +49,11 @@ func New(cfg config.Config) (*App, error) {
 
 func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	diagnosticConfig := cfg
+	cfg, protection, err := resolveConfigCredentials(cfg, options.Protector)
+	if err != nil {
 		return nil, err
 	}
 	var tlsConfig server.TLSConfig
@@ -104,7 +111,7 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 		}
 		files.SetAutoAcceptProvider(func() bool { return settings.Store().Get().AutoAccept })
 	}
-	devices, err := deviceModule.New(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, jobStore, log)
+	devices, err := deviceModule.NewWithProtector(cfg.Device, cfg.Security, cfg.Discovery, cfg.Server.Port, capabilities, bus, jobStore, log, protection.Protector, protection.Enabled)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +150,39 @@ func NewWithOptions(cfg config.Config, options Options) (*App, error) {
 	srv.SetPeerTokenValidator(devices.ValidatePeerToken)
 	srv.SetPublicPathPrefixes("/share/", "/receive/")
 	srv.SetRuntimeInfo(server.RuntimeInfo{Version: version.Value, DeviceID: cfg.Device.ID, DeviceName: cfg.Device.Name, Capabilities: capabilities})
-	srv.SetRuntimeConfig(cfg.Diagnostics())
+	srv.SetRuntimeConfig(diagnosticConfig.Diagnostics())
 	return &App{cfg: cfg, logger: log, bus: bus, manager: manager, server: srv, files: files, native: nativeModule, exit: exitRequests}, nil
+}
+
+func resolveConfigCredentials(cfg config.Config, protector credentials.Protector) (config.Config, credentials.Protection, error) {
+	protection, err := credentials.ResolveProtection(cfg.Security.CredentialProtection, protector)
+	if err != nil {
+		return config.Config{}, credentials.Protection{}, err
+	}
+	if protection.Enabled {
+		store, err := credentials.NewStore(cfg.Security.CredentialStorePath, protection.Protector)
+		if err != nil {
+			return config.Config{}, credentials.Protection{}, fmt.Errorf("initialize credential store: %w", err)
+		}
+		if cfg.Security.BearerTokenRef != "" {
+			secret, err := store.Get(cfg.Security.BearerTokenRef)
+			if err != nil {
+				return config.Config{}, credentials.Protection{}, fmt.Errorf("resolve management token reference: %w", err)
+			}
+			cfg.Security.BearerToken = string(secret)
+		}
+		if cfg.Security.PairingCodeRef != "" {
+			secret, err := store.Get(cfg.Security.PairingCodeRef)
+			if err != nil {
+				return config.Config{}, credentials.Protection{}, fmt.Errorf("resolve pairing code reference: %w", err)
+			}
+			cfg.Security.PairingCode = string(secret)
+		}
+	}
+	if cfg.Security.AuthEnabled && len(cfg.Security.BearerToken) < 16 {
+		return config.Config{}, credentials.Protection{}, errors.New("resolved management token must contain at least 16 characters when authentication is enabled")
+	}
+	return cfg, protection, nil
 }
 
 func serverScheme(cfg config.Config) string {

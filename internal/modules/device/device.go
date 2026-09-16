@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,19 +15,19 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/credentials"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/eventbus"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/syncstore"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
 )
 
-const registryVersion = 3
+const registryVersion = 4
 const maxRegistryBytes = 1024 * 1024
 const maxPeers = 1024
 
@@ -36,18 +37,20 @@ const (
 )
 
 type Module struct {
-	cfg              config.DeviceConfig
-	security         config.SecurityConfig
-	discovery        config.DiscoveryConfig
-	apiPort          int
-	capabilities     []string
-	logger           *slog.Logger
-	bus              *eventbus.Bus
-	store            *syncstore.Store
-	transport        *transport.Client
-	localSecure      bool
-	localScheme      string
-	localFingerprint string
+	cfg               config.DeviceConfig
+	security          config.SecurityConfig
+	discovery         config.DiscoveryConfig
+	apiPort           int
+	capabilities      []string
+	logger            *slog.Logger
+	bus               *eventbus.Bus
+	store             *syncstore.Store
+	transport         *transport.Client
+	localSecure       bool
+	localScheme       string
+	localFingerprint  string
+	registryProtector credentials.Protector
+	protectRegistry   bool
 
 	mu              sync.RWMutex
 	peers           map[string]Peer
@@ -61,6 +64,10 @@ type Module struct {
 }
 
 func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, store *syncstore.Store, logger *slog.Logger) (*Module, error) {
+	return NewWithProtector(cfg, security, discovery, apiPort, capabilities, bus, store, logger, nil, false)
+}
+
+func NewWithProtector(cfg config.DeviceConfig, security config.SecurityConfig, discovery config.DiscoveryConfig, apiPort int, capabilities []string, bus *eventbus.Bus, store *syncstore.Store, logger *slog.Logger, protector credentials.Protector, protectRegistry bool) (*Module, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -73,7 +80,10 @@ func New(cfg config.DeviceConfig, security config.SecurityConfig, discovery conf
 	if security.PeerTokenTTL < 0 || security.TokenOverlapTTL < 0 || security.TokenOverlapTTL >= security.PeerTokenTTL {
 		return nil, errors.New("invalid peer token lifetime configuration")
 	}
-	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer), now: func() time.Time { return time.Now().UTC() }}
+	if protectRegistry && (protector == nil || !protector.Available()) {
+		return nil, credentials.ErrUnavailable
+	}
+	m := &Module{cfg: cfg, security: security, discovery: discovery, apiPort: apiPort, capabilities: cleanCapabilities(capabilities), logger: logger, bus: bus, store: store, transport: transport.NewClient(5 * time.Second), peers: make(map[string]Peer), discovered: make(map[string]DiscoveredPeer), now: func() time.Time { return time.Now().UTC() }, registryProtector: protector, protectRegistry: protectRegistry}
 	m.localScheme = "http"
 	if err := m.load(); err != nil {
 		return nil, err
@@ -796,8 +806,11 @@ func (m *Module) load() error {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return fmt.Errorf("parse device registry: %w", err)
 	}
-	if state.Version != 1 && state.Version != 2 && state.Version != registryVersion {
+	if state.Version < 1 || state.Version > registryVersion {
 		return fmt.Errorf("unsupported device registry version: %d", state.Version)
+	}
+	if state.Version == registryVersion && state.Protection == "" {
+		return errors.New("device registry v4 is missing credential_protection")
 	}
 	for _, stored := range state.Peers {
 		if stored.Secure {
@@ -805,7 +818,10 @@ func (m *Module) load() error {
 				return fmt.Errorf("invalid secure peer %q in device registry: %w", stored.ID, err)
 			}
 		}
-		peer := peerFromPersisted(stored)
+		peer, err := m.peerFromPersisted(stored, state)
+		if err != nil {
+			return fmt.Errorf("load peer %q credentials: %w", stored.ID, err)
+		}
 		if peer.ID == "" || peer.ID == m.cfg.ID {
 			continue
 		}
@@ -814,12 +830,23 @@ func (m *Module) load() error {
 		}
 		m.peers[peer.ID] = peer
 	}
-	if state.Version < registryVersion {
+	if state.Version < 3 {
 		for id, peer := range m.peers {
 			peer.Secure = false
 			peer.Scheme = "http"
 			peer.CertificateSHA256 = ""
 			m.peers[id] = peer
+		}
+	}
+	desiredProtection := "disabled"
+	if m.protectRegistry {
+		desiredProtection = m.registryProtector.Name()
+	}
+	if state.Version < registryVersion || state.Protection != desiredProtection {
+		if state.Version == registryVersion && state.Protection != "" && state.Protection != desiredProtection {
+			if state.Protection != "disabled" || !m.protectRegistry {
+				return fmt.Errorf("device registry protection %q does not match configured protection %q", state.Protection, desiredProtection)
+			}
 		}
 		if err := m.saveLocked(); err != nil {
 			return fmt.Errorf("migrate device registry: %w", err)
@@ -831,63 +858,108 @@ func (m *Module) load() error {
 func (m *Module) saveLocked() error {
 	peers := make([]persistedPeer, 0, len(m.peers))
 	for _, peer := range m.peers {
-		peers = append(peers, persistedFromPeer(peer))
+		stored, err := m.persistedFromPeer(peer)
+		if err != nil {
+			return err
+		}
+		peers = append(peers, stored)
 	}
 	sort.Slice(peers, func(i, j int) bool { return peers[i].ID < peers[j].ID })
-	data, err := json.MarshalIndent(registryFile{Version: registryVersion, Peers: peers}, "", "  ")
+	protection := "disabled"
+	if m.protectRegistry {
+		protection = m.registryProtector.Name()
+	}
+	data, err := json.MarshalIndent(registryFile{Version: registryVersion, Protection: protection, Peers: peers}, "", "  ")
 	if err != nil {
 		return err
 	}
 	if len(data) > maxRegistryBytes {
 		return fmt.Errorf("device registry exceeds %d bytes", maxRegistryBytes)
 	}
-	dir := filepath.Dir(m.cfg.RegistryPath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("create device registry directory: %w", err)
-	}
-	tmp, err := os.CreateTemp(dir, ".localbridge-devices-*")
-	if err != nil {
-		return fmt.Errorf("create device registry temporary file: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if err := tmp.Chmod(0600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("protect device registry temporary file: %w", err)
-	}
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write device registry: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("sync device registry: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close device registry: %w", err)
-	}
-	if err := os.Rename(tmpName, m.cfg.RegistryPath); err != nil {
-		if removeErr := os.Remove(m.cfg.RegistryPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			return fmt.Errorf("replace device registry: %w (remove existing: %v)", err, removeErr)
-		}
-		if err := os.Rename(tmpName, m.cfg.RegistryPath); err != nil {
-			return fmt.Errorf("replace device registry after removing existing: %w", err)
-		}
-	}
-	return nil
+	return credentials.WriteFileAtomic(m.cfg.RegistryPath, append(data, '\n'))
 }
 
-func persistedFromPeer(peer Peer) persistedPeer {
-	return persistedPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: peer.Secure, Scheme: normalizedScheme(peer.Scheme, peer.Secure), CertificateSHA256: peer.CertificateSHA256, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+func (m *Module) persistedFromPeer(peer Peer) (persistedPeer, error) {
+	stored := persistedPeer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: peer.Secure, Scheme: normalizedScheme(peer.Scheme, peer.Secure), CertificateSHA256: peer.CertificateSHA256, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+	if !m.protectRegistry {
+		stored.Token = peer.Token
+		stored.PreviousToken = peer.PreviousToken
+		return stored, nil
+	}
+	var err error
+	if peer.Token != "" {
+		stored.TokenCiphertext, err = m.protectPeerToken(peer.ID, "current", peer.Token)
+		if err != nil {
+			return persistedPeer{}, fmt.Errorf("protect current token for peer %q: %w", peer.ID, err)
+		}
+	}
+	if peer.PreviousToken != "" {
+		stored.PreviousTokenCiphertext, err = m.protectPeerToken(peer.ID, "previous", peer.PreviousToken)
+		if err != nil {
+			return persistedPeer{}, fmt.Errorf("protect previous token for peer %q: %w", peer.ID, err)
+		}
+	}
+	return stored, nil
 }
 
-func peerFromPersisted(peer persistedPeer) Peer {
+func (m *Module) peerFromPersisted(peer persistedPeer, state registryFile) (Peer, error) {
 	secure := peer.Secure && peer.Scheme == "https" && validCertificateFingerprint(peer.CertificateSHA256)
 	fingerprint := ""
 	if secure {
 		fingerprint = peer.CertificateSHA256
 	}
-	return Peer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: secure, Scheme: normalizedScheme(peer.Scheme, secure), CertificateSHA256: fingerprint, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: peer.Token, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: peer.PreviousToken, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}
+	current, previous := peer.Token, peer.PreviousToken
+	if state.Version == registryVersion && state.Protection != "" && state.Protection != "disabled" {
+		if !m.protectRegistry || state.Protection != m.registryProtector.Name() {
+			return Peer{}, fmt.Errorf("protected registry requires %s", state.Protection)
+		}
+		if peer.Token != "" || peer.PreviousToken != "" {
+			return Peer{}, errors.New("protected registry contains plaintext token fields")
+		}
+		var err error
+		if peer.TokenCiphertext != "" {
+			current, err = m.unprotectPeerToken(peer.ID, "current", peer.TokenCiphertext)
+			if err != nil {
+				return Peer{}, err
+			}
+		}
+		if peer.PreviousTokenCiphertext != "" {
+			previous, err = m.unprotectPeerToken(peer.ID, "previous", peer.PreviousTokenCiphertext)
+			if err != nil {
+				return Peer{}, err
+			}
+		}
+	} else if peer.TokenCiphertext != "" || peer.PreviousTokenCiphertext != "" {
+		return Peer{}, errors.New("plaintext registry contains protected token fields")
+	}
+	return Peer{ID: peer.ID, Name: peer.Name, Address: peer.Address, Port: peer.Port, Capabilities: append([]string(nil), peer.Capabilities...), Status: peer.Status, Secure: secure, Scheme: normalizedScheme(peer.Scheme, secure), CertificateSHA256: fingerprint, PairedAt: peer.PairedAt, LastSeen: peer.LastSeen, Token: current, TokenIssuedAt: peer.TokenIssuedAt, TokenExpiresAt: peer.TokenExpiresAt, PreviousToken: previous, PreviousTokenExpiresAt: peer.PreviousTokenExpiresAt}, nil
+}
+
+func (m *Module) protectPeerToken(peerID, slot, token string) (string, error) {
+	ciphertext, err := m.registryProtector.Protect(peerTokenPurpose(peerID, slot), []byte(token))
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (m *Module) unprotectPeerToken(peerID, slot, encoded string) (string, error) {
+	ciphertext, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil {
+		return "", fmt.Errorf("decode %s token ciphertext: %w", slot, err)
+	}
+	plaintext, err := m.registryProtector.Unprotect(peerTokenPurpose(peerID, slot), ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("decrypt %s token: %w", slot, err)
+	}
+	if len(plaintext) == 0 {
+		return "", fmt.Errorf("decrypted %s token is empty", slot)
+	}
+	return string(plaintext), nil
+}
+
+func peerTokenPurpose(peerID, slot string) string {
+	return "localbridge/device-registry/v4/" + peerID + "/" + slot
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

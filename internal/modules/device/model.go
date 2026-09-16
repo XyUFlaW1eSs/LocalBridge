@@ -63,27 +63,30 @@ type publicPeer struct {
 }
 
 type persistedPeer struct {
-	ID                     string    `json:"id"`
-	Name                   string    `json:"name"`
-	Address                string    `json:"address,omitempty"`
-	Port                   int       `json:"port,omitempty"`
-	Capabilities           []string  `json:"capabilities,omitempty"`
-	Status                 string    `json:"status"`
-	Secure                 bool      `json:"secure"`
-	Scheme                 string    `json:"scheme"`
-	CertificateSHA256      string    `json:"certificate_sha256,omitempty"`
-	PairedAt               time.Time `json:"paired_at"`
-	LastSeen               time.Time `json:"last_seen"`
-	Token                  string    `json:"token"`
-	TokenIssuedAt          time.Time `json:"token_issued_at"`
-	TokenExpiresAt         time.Time `json:"token_expires_at"`
-	PreviousToken          string    `json:"previous_token,omitempty"`
-	PreviousTokenExpiresAt time.Time `json:"previous_token_expires_at,omitempty"`
+	ID                      string    `json:"id"`
+	Name                    string    `json:"name"`
+	Address                 string    `json:"address,omitempty"`
+	Port                    int       `json:"port,omitempty"`
+	Capabilities            []string  `json:"capabilities,omitempty"`
+	Status                  string    `json:"status"`
+	Secure                  bool      `json:"secure"`
+	Scheme                  string    `json:"scheme"`
+	CertificateSHA256       string    `json:"certificate_sha256,omitempty"`
+	PairedAt                time.Time `json:"paired_at"`
+	LastSeen                time.Time `json:"last_seen"`
+	Token                   string    `json:"token,omitempty"`
+	TokenCiphertext         string    `json:"token_ciphertext,omitempty"`
+	TokenIssuedAt           time.Time `json:"token_issued_at"`
+	TokenExpiresAt          time.Time `json:"token_expires_at"`
+	PreviousToken           string    `json:"previous_token,omitempty"`
+	PreviousTokenCiphertext string    `json:"previous_token_ciphertext,omitempty"`
+	PreviousTokenExpiresAt  time.Time `json:"previous_token_expires_at,omitempty"`
 }
 
 type registryFile struct {
-	Version int             `json:"version"`
-	Peers   []persistedPeer `json:"peers"`
+	Version    int             `json:"version"`
+	Protection string          `json:"credential_protection,omitempty"`
+	Peers      []persistedPeer `json:"peers"`
 }
 
 type discoveryAnnouncement struct {

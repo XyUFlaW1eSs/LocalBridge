@@ -217,3 +217,67 @@ func TestTLSConfigurationYAMLAndDiagnostics(t *testing.T) {
 		t.Fatalf("TLS diagnostics are incorrect or leaked a path: %s", data)
 	}
 }
+
+func TestCredentialReferencesLoadFromYAMLAndJSON(t *testing.T) {
+	for name, content := range map[string]string{
+		"yaml": "version: 1\nsecurity:\n  auth_enabled: true\n  credential_protection: required\n  credential_store_path: secure/credentials.json\n  bearer_token_ref: management\n  pairing_code_ref: pairing\n",
+		"json": `{"version":1,"security":{"auth_enabled":true,"credential_protection":"required","credential_store_path":"secure/credentials.json","bearer_token_ref":"management","pairing_code_ref":"pairing"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config")
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Security.BearerTokenRef != "management" || cfg.Security.PairingCodeRef != "pairing" || cfg.Security.CredentialProtection != "required" {
+				t.Fatalf("credential configuration was not loaded: %#v", cfg.Security)
+			}
+		})
+	}
+}
+
+func TestCredentialConfigurationRejectsConflictsAndUnsafePolicies(t *testing.T) {
+	cases := []func(*Config){
+		func(cfg *Config) {
+			cfg.Security.BearerToken, cfg.Security.BearerTokenRef = "0123456789abcdef", "management"
+		},
+		func(cfg *Config) { cfg.Security.PairingCode, cfg.Security.PairingCodeRef = "inline", "pairing" },
+		func(cfg *Config) {
+			cfg.Security.CredentialProtection, cfg.Security.BearerTokenRef = "disabled", "management"
+		},
+		func(cfg *Config) { cfg.Security.CredentialProtection, cfg.Security.PairingCode = "required", "inline" },
+		func(cfg *Config) { cfg.Security.CredentialProtection = "base64" },
+		func(cfg *Config) { cfg.Security.BearerTokenRef = "../unsafe" },
+	}
+	for i, mutate := range cases {
+		cfg := Default()
+		mutate(&cfg)
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("invalid credential configuration %d was accepted: %#v", i, cfg.Security)
+		}
+	}
+}
+
+func TestCredentialDiagnosticsShowStateWithoutNamesPathsOrSecrets(t *testing.T) {
+	cfg := Default()
+	cfg.Security.AuthEnabled = true
+	cfg.Security.BearerTokenRef = "private-management-name"
+	cfg.Security.PairingCodeRef = "private-pairing-name"
+	cfg.Security.CredentialStorePath = `C:\private\credential-store.json`
+	data, err := json.Marshal(cfg.Diagnostics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, private := range []string{cfg.Security.BearerTokenRef, cfg.Security.PairingCodeRef, cfg.Security.CredentialStorePath} {
+		if strings.Contains(text, private) {
+			t.Fatalf("credential diagnostics leaked %q: %s", private, text)
+		}
+	}
+	if !strings.Contains(text, `"management_token_source":"reference"`) || !strings.Contains(text, `"store_configured":true`) {
+		t.Fatalf("credential protection state missing: %s", text)
+	}
+}
