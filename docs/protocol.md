@@ -227,7 +227,7 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
 
 `secure: true` requires exactly a 64-character lowercase hexadecimal SHA-256 fingerprint and
 `scheme: "https"`. A peer with `secure: false` is explicit legacy HTTP. Registry v2 entries are
-migrated to registry v3 with `secure: false` and `scheme: "http"`; they are never upgraded by
+migrated to registry v4 with `secure: false` and `scheme: "http"`; they are never upgraded by
 discovery. Public device metadata may show scheme and fingerprint, but never token values.
 
 Pairing is disabled when `security.pairing_code` is empty and returns `503`; an empty request code
@@ -257,8 +257,9 @@ that target device's own current/overlap token; another peer cannot rotate it. L
 is allowed. The old token remains accepted only for `security.token_overlap_ttl` and never beyond
 its original expiry. `DELETE /api/v1/devices/{id}` revokes a peer immediately.
 
-The registry at `device.registry_path` contains sensitive plaintext credentials and must be kept
-private to the operating-system user. Version 1 registries migrate automatically; peers whose
+Registry v4 declares `credential_protection`. Under Windows `auto`/`required`, `token_ciphertext`
+and `previous_token_ciphertext` contain current-user DPAPI ciphertext and plaintext token fields
+are forbidden. Version 1–3 registries migrate automatically; peers whose
 credentials were absent become `repair_required`. An expired peer reports `token_expired` and is
 not used for probes or forwarding until it is rotated or paired again.
 
@@ -402,7 +403,7 @@ the `X-Request-ID` response header.
 `localbridge.exe -support-bundle <destination.zip> -config <config-path>` validates and loads the
 configuration, writes a new owner-readable ZIP, and exits without starting the service. The archive
 contains only redacted configuration values, runtime version/platform information, and metadata
-about the registry/sync/files/settings state files (presence, size, modification time, or a bounded
+about the credential-store/registry/sync/files/settings state files (presence, size, modification time, or a bounded
 classification). It never includes tokens, pairing codes, device identity, local paths, TLS
 certificate/private-key paths or contents, payloads, shared/received files, or state-file bodies.
 An existing destination is rejected.
@@ -416,9 +417,13 @@ server:
   tls_key_file: ""
 
 security:
+  credential_protection: required
+  credential_store_path: "data/credentials.json"
   auth_enabled: true
-  bearer_token: "a-long-random-token-at-least-16-characters"
-  pairing_code: "a-local-pairing-code"
+  bearer_token: ""
+  bearer_token_ref: management
+  pairing_code: ""
+  pairing_code_ref: pairing
   peer_token_ttl: 720h
   token_overlap_ttl: 10m
 
@@ -433,8 +438,15 @@ device:
 
 Tokens are compared using fixed-size digests and are never written to logs. Peer tokens are
 accepted at the global HTTP boundary only after authentication is enabled. The overlap duration
-must be shorter than the peer-token lifetime. Management credential provisioning and operating-
-system protected secret storage remain future hardening work.
+must be shorter than the peer-token lifetime. Inline and reference forms for the same secret are
+mutually exclusive. `required` rejects all inline secrets; Windows `auto` accepts legacy inline
+configuration but still protects peer registry tokens. The application resolves references before
+module construction and fails closed for missing/corrupt values or a short management token.
+
+The local CLI contract is `-credential-action set|delete|status -credential-name <reference>`.
+`set` reads one value from hidden terminal input or stdin, never from an argument. Operations do
+not start the service and return exit code 2 for invalid usage, 1 for an operation/protection error,
+and 0 on success. Output contains only the reference name, state and protection provider.
 
 ## Compatibility and security
 
@@ -444,6 +456,10 @@ HTTPS only. Self-signed certificates require installing a private CA/certificate
 Windows/iPhone trust store for browser/GUI use; pinned peer transport may accept the exact leaf
 certificate. Authentication remains separate from transport encryption, and the port must not
 be exposed publicly.
+
+Windows `auto`/`required` uses current-user DPAPI with UI disabled and purpose-bound optional
+entropy. On non-Windows these production modes are unsupported; explicit `disabled` is the only
+plaintext compatibility mode. Base64 is a wire encoding for ciphertext and is not encryption.
 
 The `/api/v1` prefix is reserved for backward-compatible additions. New content types should
 reuse the `Item` envelope and add a new MIME type. Breaking changes require `/api/v2` and an ADR.

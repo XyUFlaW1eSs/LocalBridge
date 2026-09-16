@@ -5,7 +5,7 @@
 LocalBridge 是一个轻量、以本地网络为优先的局域网协作平台。当前第一个可用模块通过两个 iPhone
 快捷指令，在 Windows 电脑与 iPhone 之间同步文本剪贴板内容。不需要云账号或中继服务。
 
-> 状态：Phase 0、Phase 1 / Sprint 1、包含 Sprint 2.8 TLS 的 Phase 2 基础、Phase 3.1、Phase 4.1、内嵌文件 GUI 与
+> 状态：Phase 0、Phase 1 / Sprint 1、已推进至 Sprint 2.9 受保护凭据的 Phase 2 基础、Phase 3.1、Phase 4.1、内嵌文件 GUI 与
 > Sprint 4.2B–4.2D Windows 外壳、接收确认与原生宿主窗口已交付。URL/图片模块和其余 v1.0 路线仍在开发中。
 
 ## 功能概览
@@ -44,6 +44,17 @@ Copy-Item configs/config.example.yaml configs/config.yaml
 go run ./cmd/localbridge -config configs/config.yaml
 ```
 
+Windows 上，`credential_protection: auto` 会为凭据存储和对端注册表使用当前用户 DPAPI。请勿把秘密放在命令行参数中：
+
+```powershell
+"长随机管理令牌" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name management
+"本地配对码" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name pairing
+```
+
+配置中只填写 `bearer_token_ref: management` 和 `pairing_code_ref: pairing`，内联字段保持为空。交互式输入会关闭回显；
+`status` 与 `delete` 使用相同的 action/name 参数，且绝不输出秘密。`required` 拒绝内联秘密；非 Windows 不支持生产保护模式，
+只有显式 `disabled` 才允许旧式明文兼容运行。
+
 默认监听地址为 `0.0.0.0:8899`。在 Windows 电脑上验证：
 
 ```powershell
@@ -81,6 +92,7 @@ go build ./cmd/localbridge
 | `cmd/localbridge` | 进程入口、命令行参数和信号生命周期 |
 | `internal/app` | 运行时组合与关闭流程 |
 | `internal/config` | YAML 配置与校验 |
+| `internal/credentials` | Windows 当前用户 DPAPI、受保护凭据存储与原子替换 |
 | `internal/eventbus` | 类型化事件名与非阻塞订阅 |
 | `internal/module` | 稳定的模块生命周期与路由注册 |
 | `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
@@ -121,6 +133,7 @@ go build ./cmd/localbridge
 - [Sprint 2.6 peer Token 生命周期](docs/sprints/sprint-2.6.zh-CN.md)
 - [Sprint 2.7 配置 Schema 与诊断](docs/sprints/sprint-2.7.zh-CN.md)
 - [Sprint 2.8 TLS 与证书固定](docs/sprints/sprint-2.8.zh-CN.md)
+- [Sprint 2.9 受保护凭据](docs/sprints/sprint-2.9.zh-CN.md)
 - [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [Sprint 4.1 文件传输](docs/sprints/sprint-4.1-file-transfer.zh-CN.md)
 - [Sprint 4.2 桌面 GUI](docs/sprints/sprint-4.2-desktop-gui.zh-CN.md)
@@ -131,6 +144,7 @@ go build ./cmd/localbridge
 - [ADR 0009 peer Token 生命周期](docs/adr/0009-peer-token-lifecycle.zh-CN.md)
 - [ADR 0010 版本化生效配置](docs/adr/0010-versioned-effective-configuration.zh-CN.md)
 - [ADR 0011 TLS 传输与证书固定](docs/adr/0011-tls-transport-and-certificate-pinning.zh-CN.md)
+- [ADR 0012 Windows 受保护凭据](docs/adr/0012-windows-protected-credentials.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
 - [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)

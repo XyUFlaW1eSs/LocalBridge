@@ -32,6 +32,9 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/app`: dependency composition; it is the only package that wires concrete modules.
 - `internal/config`: versioned, migrated and validated configuration plus an explicitly redacted
   diagnostic representation; no environment-specific behavior in modules.
+- `internal/credentials`: injectable protection boundary, strict versioned credential store and
+  atomic owner-only file replacement. Windows binds ciphertext to the current user with DPAPI and
+  purpose entropy; non-Windows implementations explicitly report unavailable.
 - `internal/server`: stable HTTP server and system endpoints.
 - `internal/module`: lifecycle and route contract for pluggable features.
 - `internal/eventbus`: in-process decoupling. Subscribers must tolerate dropped events when
@@ -105,15 +108,24 @@ navigates only to the local GUI origin. Its window procedure converts close into
 `minimize_to_tray` is enabled; tray actions restore the same window. Missing WebView2 falls back
 to the system browser.
 
-## Device credential flow
+## Credential and device-token flow
 
 Pairing creates a random 256-bit peer token and stores it only in the private registry model. Public
 device responses contain lifecycle timestamps and transport security metadata, not credential values.
 A secure peer also stores the exact lowercase SHA-256 of the leaf certificate DER. A rotation installs a new
 token and retains the still-valid previous token for a short configured overlap. Validation accepts
 only unexpired current/overlap credentials. Expired peers are excluded from health probes and
-outbound forwarding. Registry versions 1 and 2 migrate to version 3; legacy entries are explicitly marked HTTP. Entries affected by the former
-non-persistence bug are marked `repair_required` rather than silently trusted.
+outbound forwarding. Registry versions 1 and 2 first gain explicit legacy HTTP metadata; v3 plaintext
+tokens migrate to v4 current-user DPAPI ciphertext before the original file is atomically replaced.
+Current and previous token slots use distinct peer/slot purposes. Decryption, purpose mismatch or
+migration failure aborts composition and leaves the original file intact. Entries affected by the
+former non-persistence bug are marked `repair_required` rather than silently trusted.
+
+Application composition resolves `bearer_token_ref` and `pairing_code_ref` from the protected store
+before constructing modules. Missing/corrupt references and a short management token fail startup.
+The CLI writes secrets only from hidden console input or stdin and exits without starting services.
+Configuration diagnostics and support bundles expose only protection/source state, never values,
+reference names or the credential-store path.
 
 ## Configuration lifecycle
 

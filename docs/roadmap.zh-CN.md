@@ -18,7 +18,7 @@ LocalBridge 不应停留在“Windows 与 iPhone 剪贴板同步器”。它的�
 | 版本 | 阶段 | 状态 | 结果 |
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | 已交付 | Windows 文本剪贴板桥接和 iPhone Push/Pull 快捷指令 |
-| `v0.2.x` | Phase 2 | 进行中 | Sprint 2.1–2.8 已交付 TLS 基线、证书固定和版本化配置诊断；生产加固仍待完成 |
+| `v0.2.x` | Phase 2 | 进行中 | Sprint 2.1–2.9 已交付 TLS 固定与 Windows 受保护凭据；生产加固仍待完成 |
 | `v0.3.x` | Phase 3 | 进行中 | Sprint 3.1 已交付 Envelope/Job 存储；重试、历史和富剪贴板仍待完成 |
 | `v0.4.x` | Phase 4 | 进行中 | Sprint 4.2A–4.2D GUI、Windows 外壳、接收确认与原生宿主已交付；URL、图片仍待完成 |
 | `v0.5.x` | Phase 5 | 计划中 | 其他客户端与设备适配器 |
@@ -60,7 +60,7 @@ LocalBridge 不应停留在“Windows 与 iPhone 剪贴板同步器”。它的�
 - Device ID、SHA-256 去重和反馈循环抑制。
 - 运行诊断、测试和可运行的 `v0.1.0` 发布包。
 
-### Phase 2 — 平台加固、信任与发现（进行中；Sprint 2.1–2.7 已交付）
+### Phase 2 — 平台加固、信任与发现（进行中；Sprint 2.1–2.9 已交付）
 
 目标：在增加更多载荷类型前，让平台安全、可诊断、可维护。
 
@@ -78,6 +78,8 @@ LocalBridge 不应停留在“Windows 与 iPhone 剪贴板同步器”。它的�
   `repair_required`；静态凭据保护和面向用户的配置流程仍待完成。
 - Sprint 2.7 已定义配置 Schema v1、在内存迁移旧版 v0、拒绝未知/未来输入，并提供仅管理方可读的脱敏生效配置诊断。
 - Sprint 2.8 增加可选 TLS 1.2+ 服务端传输、仅 HTTPS 启动、叶证书指纹声明、固定安全对端、明确的 HTTP legacy 迁移和拒绝重定向的出站传输；首次信任 UX、证书轮换和 iPhone 信任安装仍是后续工作。
+- Sprint 2.9 增加当前用户 Windows DPAPI 引用式管理/配对秘密、注册表 v4 受保护 peer Token、v3 原子迁移、关闭式启动失败，
+  以及安全的 CLI set/delete/status 操作。macOS Keychain 与 Linux Secret Service 仍是后续工作。
 - CLI 现在可以生成不覆盖已有文件的脱敏支持包，只包含安全配置、运行时信息和状态文件元数据，不暴露凭据、身份、本地路径、载荷或状态正文。
 - 通过 mDNS 或 UDP 广播进行局域网发现，并保留手动 IP/端口回退方式。
 - 对端设备注册表，记录在线状态、最后出现时间、能力以及网络变化后的恢复。

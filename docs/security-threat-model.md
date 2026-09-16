@@ -72,19 +72,26 @@ process boundary, but revocation, bounded retention and observable actions limit
   receive approval and restart-safe transfer state.
 - Atomic-style versioned stores with migration checks and bounded retention/counts.
 - Windows current-user registry integration without elevation and no payload/path data in events.
+- TLS 1.2+ HTTPS-only startup when enabled, exact leaf-certificate pinning, redirect rejection and
+  no HTTP fallback for secure peers (Sprint 2.8).
+- Non-overwriting redacted support bundles that exclude secrets, identity, paths, TLS material,
+  payloads and state bodies.
+- Windows current-user DPAPI for credential references and registry v4 peer tokens, with
+  purpose-bound ciphertext and fail-closed atomic v3 migration (Sprint 2.9).
 
 ## Open risks before v1.0
 
-- LAN HTTP remains plaintext until Sprint 2.8 is accepted. Tokens and content are observable and
-  modifiable by an active network attacker.
-- Peer and management credentials are plaintext in configuration/registry files; OS credential-vault
-  integration is not implemented.
+- TLS remains opt-in for compatibility; deployments that explicitly keep HTTP expose tokens and
+  content to an active LAN attacker. Secure peers themselves do not downgrade.
+- macOS Keychain and Linux Secret Service are not implemented. Those platforms must explicitly use
+  `disabled` plaintext compatibility mode or refuse startup; Windows users may also leave legacy
+  inline YAML values until they manually replace them with references.
 - Pairing-code provisioning and first certificate-fingerprint verification do not yet have a polished,
   user-verifiable ceremony.
 - Shared rate limiting, connection quotas, disk reservation and abusive-peer backoff remain incomplete.
 - Browser origin/CSRF policy and a Content Security Policy require a dedicated review.
 - There is no signed installer/update channel, dependency SBOM, fuzzing campaign or external audit.
-- Support-bundle export and privacy-preserving deletion verification are not yet implemented.
+- Privacy-preserving deletion verification and an incident-response/revocation runbook are not yet implemented.
 
 ## TLS and pairing acceptance criteria
 
@@ -109,4 +116,3 @@ Before `v1.0.0`, LocalBridge must additionally complete and record:
 6. Dependency audit/SBOM, signed reproducible artifacts, update rollback and migration rehearsal.
 7. A sanitized support bundle, privacy deletion test and incident-response/revocation runbook.
 8. Cross-client conformance tests proving authentication, downgrade rejection and capability fallback.
-

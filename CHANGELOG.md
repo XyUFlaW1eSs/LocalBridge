@@ -22,6 +22,10 @@ All notable changes to LocalBridge are documented here.
   SHA-256 advertisement, v3 secure/legacy peer metadata and v2 registry migration, exact
   certificate-pinned HTTPS peer transport, redirect rejection and scheme-aware GUI/Explorer URLs.
   First-use fingerprint UX, automatic certificate rotation and iPhone trust installation remain future work.
+- Phase 2 Sprint 2.9: added Windows current-user DPAPI protection, a strict versioned credential
+  store, reference-based management/pairing secrets, safe CLI set/delete/status operations,
+  protected registry v4 peer-token persistence and fail-closed atomic v3 plaintext migration.
+  Non-Windows protected stores and automatic cleanup of legacy inline YAML remain future work.
 - Added `-support-bundle` for non-overwriting, owner-readable ZIP reports containing only redacted
   configuration, runtime information and state-file metadata; credentials, identity, paths, TLS
   material, payloads and persisted state bodies are excluded.

@@ -40,27 +40,49 @@ devices to connect:
 
 ```yaml
 security:
+  credential_protection: required
+  credential_store_path: "data/credentials.json"
   auth_enabled: true
-  bearer_token: "replace-with-a-long-random-token"
-  pairing_code: "replace-with-a-local-pairing-code"
+  bearer_token: ""
+  bearer_token_ref: management
+  pairing_code: ""
+  pairing_code_ref: pairing
   peer_token_ttl: 720h
   token_overlap_ttl: 10m
 ```
 
-Generate a token outside the repository, for example with
-`[guid]::NewGuid().ToString("N")` in PowerShell. The token must be at least 16 characters;
-use a longer random value in practice. The server never logs it.
+Generate a token outside the repository, for example with `[guid]::NewGuid().ToString("N")`,
+then write both secrets through stdin (or omit the pipe for hidden terminal input):
+
+```powershell
+"replace-with-a-long-random-token" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name management
+"replace-with-a-local-pairing-code" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name pairing
+.\dist\localbridge.exe -config .\configs\config.yaml -credential-action status -credential-name management
+```
+
+The management token must contain at least 16 characters. Secret values are never accepted as
+arguments or printed by set/status/delete. The store is current-user DPAPI protected, versioned,
+size-bounded and atomically replaced with owner-only permissions. A destination entry update
+preserves unrelated entries. Deletion uses `-credential-action delete`.
 
 To pair another LocalBridge host, set a local `security.pairing_code`, then call
 `POST /api/v1/devices/pair` with the peer's ID, address, port and capabilities. Store the
 returned peer token on the peer side. It expires after `peer_token_ttl`; rotate it before expiry
 with `POST /api/v1/devices/{id}/token/rotate`. The old credential remains usable only for the
-short overlap period. The registry file contains plaintext credentials, so keep the data directory
-private and exclude it from backups or support bundles unless it is encrypted. Version 1 registry
+short overlap period. Under Windows `auto` or `required`, registry v4 stores current and previous
+peer tokens only as current-user DPAPI ciphertext. A v3 plaintext registry is rewritten atomically
+only after every token is protected; protection/decryption failure aborts startup and preserves the
+original file. Version 1 registry
 entries without a persisted token become `repair_required` and must be paired or locally rotated.
 Set `discovery.enabled: true` only when UDP broadcast on the configured port is acceptable;
 discovery does not grant trust. A positive
 `device.health_interval` enables best-effort peer health checks and local clipboard forwarding.
+
+`credential_protection: auto` and `required` require Windows DPAPI. Other operating systems report
+protected storage as unsupported and refuse startup; only explicit `disabled` permits legacy plaintext
+storage. `disabled` is not encryption, and base64 encoding is never described as protection. Switching
+from protected registry v4 to disabled is rejected. Existing inline YAML values remain compatible in
+Windows `auto` mode but are not migrated or deleted automatically; use references and clear them manually.
 
 ### TLS transport
 

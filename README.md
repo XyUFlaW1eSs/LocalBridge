@@ -6,7 +6,7 @@ LocalBridge is a lightweight, local-first LAN collaboration platform. Its first 
 module synchronizes text clipboard content between a Windows PC and an iPhone through two
 iPhone Shortcuts. No cloud account or relay service is required.
 
-> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation including Sprint 2.8 TLS, Phase 3.1, Phase 4.1, the embedded
+> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation through Sprint 2.9 protected credentials, Phase 3.1, Phase 4.1, the embedded
 > file GUI and Sprints 4.2B–4.2D Windows shell, receive approval and native hosted window are delivered.
 > URL/image modules and the remaining v1.0 roadmap are still in progress.
 
@@ -61,6 +61,19 @@ The default address is `0.0.0.0:8899`. Verify it from the Windows machine:
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 ```
 
+On Windows, `credential_protection: auto` uses current-user DPAPI for the credential store and
+peer registry. Provision secrets without placing them on the command line:
+
+```powershell
+"a-long-random-management-token" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name management
+"a-local-pairing-code" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name pairing
+```
+
+Set `bearer_token_ref: management` and `pairing_code_ref: pairing`; leave the inline fields empty.
+Interactive input is hidden. `status` and `delete` use the same action/name flags and never print
+secret values. `required` rejects inline secrets; non-Windows production protection is unsupported
+and only explicit `disabled` mode permits legacy plaintext operation.
+
 Create a redacted support bundle without starting the service:
 
 ```powershell
@@ -94,6 +107,7 @@ on CI and on other platforms.
 | `cmd/localbridge` | Process entry point and signal lifecycle |
 | `internal/app` | Runtime composition and shutdown |
 | `internal/config` | YAML configuration and validation |
+| `internal/credentials` | Windows current-user DPAPI, protected credential store and atomic replacement |
 | `internal/eventbus` | Typed event names and non-blocking subscriptions |
 | `internal/module` | Stable module lifecycle and route registration |
 | `internal/modules/device` | Device registry, explicit pairing and peer metadata |
@@ -136,6 +150,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 2.6 peer-token lifecycle](docs/sprints/sprint-2.6.md)
 - [Sprint 2.7 configuration schema and diagnostics](docs/sprints/sprint-2.7.md)
 - [Sprint 2.8 TLS and certificate pinning](docs/sprints/sprint-2.8.md)
+- [Sprint 2.9 protected credentials](docs/sprints/sprint-2.9.md)
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
@@ -146,6 +161,7 @@ expose port 8899 or share URLs to the public internet.
 - [ADR 0009 peer-token lifecycle](docs/adr/0009-peer-token-lifecycle.md)
 - [ADR 0010 versioned effective configuration](docs/adr/0010-versioned-effective-configuration.md)
 - [ADR 0011 TLS transport and certificate pinning](docs/adr/0011-tls-transport-and-certificate-pinning.md)
+- [ADR 0012 Windows protected credentials](docs/adr/0012-windows-protected-credentials.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

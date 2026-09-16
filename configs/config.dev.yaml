@@ -8,6 +8,12 @@ device:
   id: "local-dev"
   name: "LocalBridge Development"
 
+security:
+  # Development-only cross-platform compatibility. This stores peer tokens in plaintext.
+  # Windows production configurations should use auto or required instead.
+  credential_protection: disabled
+  credential_store_path: "data/credentials.json"
+
 clipboard:
   enabled: true
   max_text_bytes: 1048576

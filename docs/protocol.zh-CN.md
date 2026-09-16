@@ -214,7 +214,7 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 ```
 
 `secure: true` 必须同时使用 `scheme: "https"` 和严格 64 位小写十六进制 SHA-256 指纹。`secure: false` 明确表示
-legacy HTTP。registry v2 迁移到 v3 时会写入 `secure: false`、`scheme: "http"`，不会被 discovery 自动升级。公开设备元数据
+legacy HTTP。registry v2 迁移到 v4 时会写入 `secure: false`、`scheme: "http"`，不会被 discovery 自动升级。公开设备元数据
 可以显示 scheme 和指纹，但绝不显示 Token。
 
 `security.pairing_code` 为空时配对功能关闭并返回 `503`；请求中提交空 code 不会启用它。
@@ -241,7 +241,8 @@ legacy HTTP。registry v2 迁移到 v3 时会写入 `secure: false`、`scheme: "
 本机回环管理允许执行。旧 Token 仅在 `security.token_overlap_ttl` 内继续有效，而且绝不会超过自身原始过期时间。
 `DELETE /api/v1/devices/{id}` 会立即撤销对端。
 
-`device.registry_path` 注册表包含敏感明文凭据，必须限制为操作系统当前用户访问。版本 1 注册表会自动迁移；缺少凭据的
+注册表 v4 声明 `credential_protection`。Windows `auto`/`required` 下，`token_ciphertext` 与
+`previous_token_ciphertext` 保存当前用户 DPAPI 密文，并禁止明文 Token 字段。版本 1–3 注册表会自动迁移；缺少凭据的
 对端变为 `repair_required`。过期对端显示 `token_expired`，在重新配对或轮换前不会用于探测和转发。
 
 ### 局域网发现
@@ -346,7 +347,7 @@ Header 中返回同一个值。
 ## 支持包
 
 `localbridge.exe -support-bundle <destination.zip> -config <config-path>` 会加载并校验配置，写入新的仅所有者可读 ZIP，随后退出，
-不会启动服务。压缩包只包含脱敏配置值、运行时版本/平台信息，以及 registry/sync/files/settings 状态文件的元数据（存在性、大小、
+不会启动服务。压缩包只包含脱敏配置值、运行时版本/平台信息，以及 credential-store/registry/sync/files/settings 状态文件的元数据（存在性、大小、
 修改时间或有限分类）。它绝不包含 Token、配对码、设备身份、本地路径、TLS 证书/私钥路径或内容、载荷、分享/接收文件或状态文件正文。
 目标文件已存在时会拒绝写入。
 
@@ -359,9 +360,13 @@ server:
   tls_key_file: ""
 
 security:
+  credential_protection: required
+  credential_store_path: "data/credentials.json"
   auth_enabled: true
-  bearer_token: "a-long-random-token-at-least-16-characters"
-  pairing_code: "a-local-pairing-code"
+  bearer_token: ""
+  bearer_token_ref: management
+  pairing_code: ""
+  pairing_code_ref: pairing
   peer_token_ttl: 720h
   token_overlap_ttl: 10m
 
@@ -375,13 +380,20 @@ device:
 ```
 
 服务端通过固定长度摘要比较 Token，并且不会把 Token 写入日志。只有启用认证后，peer Token 才会在全局 HTTP 边界生效。
-重叠期必须短于 peer Token 有效期。管理凭据自动配置和操作系统保护的密钥存储仍属于后续加固。
+重叠期必须短于 peer Token 有效期。同一秘密的内联值与引用互斥；`required` 拒绝所有内联秘密。Windows `auto` 兼容旧内联配置，
+但仍保护 peer 注册表 Token。应用会在构造模块前解析引用；引用缺失/损坏或管理 Token 过短都会关闭式启动失败。
+
+本地 CLI 契约为 `-credential-action set|delete|status -credential-name <引用>`。`set` 只从隐藏终端输入或 stdin 读取一行，
+绝不从参数读取。操作不会启动服务；无效用法返回退出码 2，操作/保护错误返回 1，成功返回 0。输出只包含引用名、状态和保护提供方。
 
 ## 兼容性与安全
 
 TLS 为兼容现有部署默认关闭。启用时，应用初始化必须同时加载证书和私钥，最低 TLS 版本为 1.2，服务端只启动 HTTPS。
 自签名证书用于浏览器/GUI 时，需要将私有 CA/证书安装到 Windows/iPhone 信任库；固定精确叶证书的对端传输可以接受该证书。
 认证仍与传输加密分离，且不得将端口暴露到公网。
+
+Windows `auto`/`required` 使用禁用 UI、以用途 entropy 绑定的当前用户 DPAPI。非 Windows 不支持这些生产模式；只有显式
+`disabled` 是明文兼容模式。base64 只是密文传输编码，不是加密。
 
 `/api/v1` 前缀用于向后兼容的增量扩展。新的内容类型应复用 `Item` 信封并增加 MIME 类型。破坏性变更需要使用
 `/api/v2` 并编写 ADR。

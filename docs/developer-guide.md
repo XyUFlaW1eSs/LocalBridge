@@ -99,6 +99,20 @@ requires a new schema version, an explicit in-memory migration, rollback notes a
 supported source version. Never silently accept a future version or emit secrets through effective-
 configuration diagnostics.
 
+### Credential protection changes
+
+Use the `credentials.Protector` interface in tests; do not call DPAPI directly outside
+`internal/credentials`. Every protected field needs a stable, field-specific purpose, and tests
+must prove that a different purpose and damaged ciphertext fail. Stores must bound input, reject
+unknown versions/fields and duplicate names, write `0600` temporary files, flush, and atomically
+replace only after all encryption succeeds. Migration tests must compare the original bytes after
+an injected failure. Never add a secret-valued CLI flag, log a resolved secret, include references
+or local paths in support bundles, or describe encoding/obfuscation as encryption.
+
+Security changes must test both protected and explicit `disabled` compatibility paths, Windows
+test/build, `GOOS=linux` build, redacted diagnostics and restart behavior. Updating configuration
+does not authorize rewriting or deleting a user's YAML inline values.
+
 ## Release process
 
 Before tagging a release, update the roadmap status, changelog, configuration examples,

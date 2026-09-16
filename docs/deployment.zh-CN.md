@@ -35,22 +35,39 @@ ZIP 只包含脱敏配置、运行时信息和状态文件元数据，不包含�
 
 ```yaml
 security:
+  credential_protection: required
+  credential_store_path: "data/credentials.json"
   auth_enabled: true
-  bearer_token: "replace-with-a-long-random-token"
-  pairing_code: "replace-with-a-local-pairing-code"
+  bearer_token: ""
+  bearer_token_ref: management
+  pairing_code: ""
+  pairing_code_ref: pairing
   peer_token_ttl: 720h
   token_overlap_ttl: 10m
 ```
 
-请在仓库外生成 Token，例如在 PowerShell 中使用 `[guid]::NewGuid().ToString("N")`。Token 至少需要 16 个字符，
-实际使用时应采用更长的随机值。服务端不会记录 Token。
+请在仓库外生成 Token，例如在 PowerShell 中使用 `[guid]::NewGuid().ToString("N")`，再通过 stdin 写入（不使用管道时为隐藏终端输入）：
+
+```powershell
+"replace-with-a-long-random-token" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name management
+"replace-with-a-local-pairing-code" | .\dist\localbridge.exe -config .\configs\config.yaml -credential-action set -credential-name pairing
+.\dist\localbridge.exe -config .\configs\config.yaml -credential-action status -credential-name management
+```
+
+管理 Token 至少 16 个字符。set/status/delete 都不接受秘密参数，也不会输出秘密值。凭据存储由当前用户 DPAPI 保护，
+具有版本/大小限制，以仅所有者权限原子替换；更新一个条目不会破坏其他条目。删除使用 `-credential-action delete`。
 
 如需配对另一台 LocalBridge 主机，设置本地 `security.pairing_code`，然后向 `POST /api/v1/devices/pair` 提交对端 ID、
 地址、端口和能力，并在对端安全保存返回的 peer Token。它会在 `peer_token_ttl` 后过期，应在到期前通过
-`POST /api/v1/devices/{id}/token/rotate` 轮换；旧凭据只在短暂重叠期继续有效。注册表文件包含明文凭据，
-数据目录必须限制为当前用户访问；除非备份或支持包已加密，否则不要包含它。版本 1 注册表中缺失持久化 Token 的记录会变为
+`POST /api/v1/devices/{id}/token/rotate` 轮换；旧凭据只在短暂重叠期继续有效。在 Windows `auto` 或 `required` 下，
+注册表 v4 只持久化当前用户 DPAPI 密文形式的当前/上一代 peer Token。v3 明文注册表只有在全部 Token 保护成功后才原子改写；
+保护或解密失败会中止启动并保留原文件。版本 1 注册表中缺失持久化 Token 的记录会变为
 `repair_required`，需要重新配对或由本机轮换。只有确认允许在配置端口上使用 UDP 广播时才启用 `discovery.enabled`；
 发现不会授予信任。正数的 `device.health_interval` 会启用尽力而为的对端健康检查和本地剪贴板出站。
+
+`credential_protection: auto` 与 `required` 需要 Windows DPAPI。其他操作系统会明确报告生产保护不受支持并拒绝启动；
+只有显式 `disabled` 才允许旧式明文持久化。`disabled` 不是加密，base64 编码也绝不称为保护。禁止把受保护的 v4 注册表
+降级为 disabled。Windows `auto` 仍兼容旧 YAML 内联值，但不会自动迁移或删除它们；改为引用后必须由用户手动清理。
 
 ### TLS 传输
 

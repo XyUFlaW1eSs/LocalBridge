@@ -10,8 +10,9 @@ collaboration platform.
 - Phase 0: repository bootstrap and core runtime.
 - Phase 1 / Sprint 1: text clipboard exchange between Windows and iPhone Shortcuts.
 - `v0.1.0`: runnable Windows package with foreground diagnostics and bilingual documentation.
-- Phase 2 Sprints 2.1–2.7: request identity, capabilities, authentication, explicit pairing,
-  discovery, peer health/outbound transport, expiring peer-token rotation and versioned config diagnostics.
+- Phase 2 Sprints 2.1–2.9: request identity, capabilities, authentication, explicit pairing,
+  discovery, peer health/outbound transport, expiring peer-token rotation, TLS pinning, versioned
+  diagnostics and Windows protected credentials.
 - Phase 4.1: persisted multi-file shares, mobile download/upload pages, HTTP Range,
   Content-Range resume and recovery-safe file storage foundation.
 - Phase 4.2A–4.2D: embedded file GUI, local QR PNG, controlled browser uploads, per-user Windows
@@ -19,9 +20,9 @@ collaboration platform.
 
 ## Planned releases
 
-- **Phase 2 / `v0.2.x` — Platform hardening:** Sprints 2.1–2.7 delivered request identity through
-  versioned effective-configuration diagnostics; remaining work includes protected credential storage, user provisioning,
-  secure transport, diagnostics, shared retry/timeout policy and configuration migration.
+- **Phase 2 / `v0.2.x` — Platform hardening:** Sprints 2.1–2.9 delivered request identity through
+  TLS pinning and Windows protected credentials; remaining work includes user provisioning,
+  non-Windows protected stores, shared retry/timeout policy and secure-default migration.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.
 - **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer, the embedded GUI and the Windows shell

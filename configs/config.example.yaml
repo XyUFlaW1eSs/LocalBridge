@@ -19,10 +19,16 @@ device:
   health_interval: 30s
 
 security:
-  # Enable after setting a strong token. Pairing code is required by /api/v1/devices/pair.
+  # Windows auto mode uses current-user DPAPI for the credential store and peer registry.
+  # Use required to reject inline secrets. Non-Windows requires explicit disabled legacy mode.
+  credential_protection: auto
+  credential_store_path: "data/credentials.json"
+  # Write secrets with -credential-action set, then put only their reference names here.
   auth_enabled: false
   bearer_token: ""
+  bearer_token_ref: ""
   pairing_code: ""
+  pairing_code_ref: ""
   peer_token_ttl: 720h
   token_overlap_ttl: 10m
 
