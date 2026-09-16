@@ -27,6 +27,10 @@ notepad .\configs\config.yaml
 `version: 1`。未来版本会被拒绝，而不会被猜测性解析。`-check-config` 会执行同样的严格加载，输出脱敏的生效 JSON 后退出，
 不会启动 GUI 或 HTTP Server。
 
+如需在不启动服务的情况下收集排障信息，可运行 `localbridge.exe -support-bundle .\\support.zip -config .\\configs\\config.yaml`。
+ZIP 只包含脱敏配置、运行时信息和状态文件元数据，不包含凭据、设备身份、本地路径、TLS 证书/私钥路径或内容、载荷或状态正文；
+目标文件已存在时不会覆盖。
+
 在允许其他设备连接前，建议启用 Phase 2 的过渡认证：
 
 ```yaml

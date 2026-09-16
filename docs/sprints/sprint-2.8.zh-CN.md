@@ -13,6 +13,7 @@
 - pairing/Peer/registry v3 安全元数据，以及 v1/v2 迁移为明确 legacy HTTP。
 - HTTPS 出站传输固定精确的已配对叶证书；只有精确 `VerifyConnection` 才接受自签名证书，拒绝重定向，secure peer 绝不降级。
 - 本机 GUI、Explorer 复用、capability 和文件分享 URL 按 scheme 生成。
+- `-support-bundle` CLI：不启动模块即可生成不覆盖已有文件的脱敏 ZIP，只包含安全配置/运行时字段和状态文件元数据。
 - 覆盖 HTTPS 成功、错误指纹、HTTP legacy、重定向、配置缺失、registry 迁移、discovery 和 capabilities 的测试。
 
 ## 延后工作

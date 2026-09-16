@@ -43,6 +43,8 @@ Shortcuts, which is compatible with iOS's background execution constraints.
   best-effort outbound delivery. Durable queues and retry policy belong to the future sync engine.
 - HTTPS peer endpoints pin the paired leaf certificate and reject all redirects; secure peers never
   downgrade to HTTP.
+- `internal/diagnostics`: content-safe support-bundle reports containing only redacted configuration,
+  runtime information and state-file metadata; it never reads persisted state bodies.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
   in a build-tagged adapter.
 - `internal/modules/files`: persisted share/receive metadata, capability URLs, safe source-file
@@ -120,6 +122,9 @@ is migrated to the current schema in memory; unsupported future versions and unk
 before application composition. The server receives only the redacted diagnostic representation.
 Its endpoint distinguishes management authentication from peer authentication and never exposes
 the source file path or credential values.
+
+The CLI can generate a non-overwriting support ZIP and exit before starting modules. The bundle
+contains no device identity, local paths, credentials, TLS material, payloads or state-file bodies.
 
 ## Extension rule
 

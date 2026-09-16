@@ -343,6 +343,13 @@ Windows Explorer 动词使用 `localbridge.exe -share <file> [file...]`。参数
 `request_id`，并在 `X-Request-ID` 响应
 Header 中返回同一个值。
 
+## 支持包
+
+`localbridge.exe -support-bundle <destination.zip> -config <config-path>` 会加载并校验配置，写入新的仅所有者可读 ZIP，随后退出，
+不会启动服务。压缩包只包含脱敏配置值、运行时版本/平台信息，以及 registry/sync/files/settings 状态文件的元数据（存在性、大小、
+修改时间或有限分类）。它绝不包含 Token、配对码、设备身份、本地路径、TLS 证书/私钥路径或内容、载荷、分享/接收文件或状态文件正文。
+目标文件已存在时会拒绝写入。
+
 ## 安全配置
 
 ```yaml

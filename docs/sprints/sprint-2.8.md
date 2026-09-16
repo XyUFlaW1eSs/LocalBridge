@@ -17,6 +17,8 @@ compatibility. TLS is opt-in because existing installations and Shortcuts use HT
 - HTTPS outbound transport pins the exact paired leaf certificate, accepts self-signed certificates
   only through that exact `VerifyConnection`, rejects redirects, and never downgrades secure peers.
 - Scheme-aware local GUI, Explorer reuse, capability and file-share URL generation.
+- A `-support-bundle` CLI that creates a non-overwriting redacted ZIP without starting modules;
+  it contains only safe configuration/runtime fields and state-file metadata.
 - Tests for HTTPS success, wrong fingerprints, HTTP legacy, redirects, missing configuration,
   registry migration, discovery and capabilities.
 

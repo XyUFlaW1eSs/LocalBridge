@@ -16,6 +16,7 @@ import (
 
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/app"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/config"
+	"github.com/XyUFlaW1eSs/LocalBridge/internal/diagnostics"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/native"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/server"
 	"github.com/XyUFlaW1eSs/LocalBridge/internal/transport"
@@ -27,6 +28,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version")
 	checkConfig := flag.Bool("check-config", false, "validate configuration and print redacted effective values")
 	shareFiles := flag.Bool("share", false, "share file arguments through LocalBridge")
+	supportBundle := flag.String("support-bundle", "", "write a redacted diagnostics ZIP to this path and exit")
 	flag.Parse()
 	if *showVersion {
 		println("LocalBridge", version.Value)
@@ -43,6 +45,14 @@ func main() {
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
+	}
+	if *supportBundle != "" {
+		if err := diagnostics.Create(*supportBundle, cfg, version.Value); err != nil {
+			slog.Error("failed to create support bundle", "error", err)
+			os.Exit(1)
+		}
+		fmt.Printf("LocalBridge support bundle written to %s\n", *supportBundle)
+		return
 	}
 	if *checkConfig {
 		encoder := json.NewEncoder(os.Stdout)

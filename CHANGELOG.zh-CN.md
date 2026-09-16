@@ -16,6 +16,8 @@
   以及非交互式 `-check-config` 命令。
 - Phase 2 Sprint 2.8：增加可选 TLS 1.2+ 和仅 HTTPS 启动、小写叶证书 SHA-256 声明、v3 安全/legacy 对端元数据与 v2 注册表迁移、
   精确证书固定的 HTTPS 对端传输、重定向拒绝以及按 scheme 生成 GUI/Explorer URL。首次指纹 UX、自动证书轮换和 iPhone 信任安装仍是后续工作。
+- 增加 `-support-bundle`，生成不覆盖、仅所有者可读的 ZIP；只包含脱敏配置、运行时信息和状态文件元数据，排除凭据、身份、本地路径、
+  TLS 材料、载荷和持久化状态正文。
 - Phase 3 Sprint 3.1：增加通用 Envelope、持久化同步 Job、保留边界和只读任务查询接口。
 - Phase 4 Sprint 4.2A：增加内嵌 `/app/` GUI、浏览器安全多文件分享、接收记录界面、本地真实二维码 PNG 生成和版本化设置持久化。
 - Phase 4 Sprint 4.2B 基础：增加归属分享文件清理、当前用户级 Windows 开机启动与 Explorer 右键菜单同步、原生托盘、

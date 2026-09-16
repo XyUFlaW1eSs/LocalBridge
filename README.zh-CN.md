@@ -5,7 +5,7 @@
 LocalBridge 是一个轻量、以本地网络为优先的局域网协作平台。当前第一个可用模块通过两个 iPhone
 快捷指令，在 Windows 电脑与 iPhone 之间同步文本剪贴板内容。不需要云账号或中继服务。
 
-> 状态：Phase 0、Phase 1 / Sprint 1、Phase 2 基础、Phase 3.1、Phase 4.1、内嵌文件 GUI 与
+> 状态：Phase 0、Phase 1 / Sprint 1、包含 Sprint 2.8 TLS 的 Phase 2 基础、Phase 3.1、Phase 4.1、内嵌文件 GUI 与
 > Sprint 4.2B–4.2D Windows 外壳、接收确认与原生宿主窗口已交付。URL/图片模块和其余 v1.0 路线仍在开发中。
 
 ## 功能概览
@@ -36,8 +36,8 @@ GUI 现由 WebView2 原生窗口承载，关闭窗口会遵循 `minimize_to_tray
 
 ## Windows 快速开始
 
-要求：Go 1.24 或更高版本，以及可信的私有局域网。Bearer/peer 认证可选，但尚未实现 TLS；局域网部署应启用认证，
-且绝不能暴露到公网。
+要求：Go 1.24 或更高版本，以及可信的私有局域网。Bearer/peer 认证可选；TLS 为兼容现有部署默认关闭，可通过证书/私钥对启用。
+局域网部署应启用认证，且绝不能暴露到公网。
 
 ```powershell
 Copy-Item configs/config.example.yaml configs/config.yaml
@@ -49,6 +49,15 @@ go run ./cmd/localbridge -config configs/config.yaml
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 ```
+
+可以在不启动服务的情况下生成脱敏支持包：
+
+```powershell
+.\dist\localbridge.exe -support-bundle .\support.zip -config .\configs\config.yaml
+```
+
+支持包只包含脱敏配置、运行时信息和状态文件元数据，不包含 Token、配对码、设备身份、本地路径、TLS 证书/私钥路径或内容、
+载荷或持久化状态正文。已存在的输出文件不会被覆盖。
 
 然后将 [`shortcut/README.md`](shortcut/README.md) 中的 `WINDOWS_IP` 替换为 Windows 私有 IPv4 地址，
 并创建 Push Clipboard 与 Pull Clipboard 快捷指令。
@@ -76,6 +85,7 @@ go build ./cmd/localbridge
 | `internal/module` | 稳定的模块生命周期与路由注册 |
 | `internal/modules/device` | 设备注册表、显式配对和对端元数据 |
 | `internal/transport` | 有边界的认证 HTTP JSON 对端传输 |
+| `internal/diagnostics` | 脱敏支持包生成 |
 | `internal/syncstore` | 带版本的 Envelope 与持久化同步任务状态 |
 | `internal/server` | 标准库 HTTP 服务与健康接口 |
 | `internal/modules/clipboard` | 剪贴板 API、去重和平台适配器 |
@@ -110,6 +120,7 @@ go build ./cmd/localbridge
 - [Sprint 2.5 交付](docs/sprints/sprint-2.5.zh-CN.md)
 - [Sprint 2.6 peer Token 生命周期](docs/sprints/sprint-2.6.zh-CN.md)
 - [Sprint 2.7 配置 Schema 与诊断](docs/sprints/sprint-2.7.zh-CN.md)
+- [Sprint 2.8 TLS 与证书固定](docs/sprints/sprint-2.8.zh-CN.md)
 - [Sprint 3.1 交付](docs/sprints/sprint-3.1.zh-CN.md)
 - [Sprint 4.1 文件传输](docs/sprints/sprint-4.1-file-transfer.zh-CN.md)
 - [Sprint 4.2 桌面 GUI](docs/sprints/sprint-4.2-desktop-gui.zh-CN.md)
@@ -119,6 +130,7 @@ go build ./cmd/localbridge
 - [Sprint 4.2D Windows 原生宿主](docs/sprints/sprint-4.2d.zh-CN.md)
 - [ADR 0009 peer Token 生命周期](docs/adr/0009-peer-token-lifecycle.zh-CN.md)
 - [ADR 0010 版本化生效配置](docs/adr/0010-versioned-effective-configuration.zh-CN.md)
+- [ADR 0011 TLS 传输与证书固定](docs/adr/0011-tls-transport-and-certificate-pinning.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
 - [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)

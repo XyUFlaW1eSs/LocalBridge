@@ -6,7 +6,7 @@ LocalBridge is a lightweight, local-first LAN collaboration platform. Its first 
 module synchronizes text clipboard content between a Windows PC and an iPhone through two
 iPhone Shortcuts. No cloud account or relay service is required.
 
-> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1, Phase 4.1, the embedded
+> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation including Sprint 2.8 TLS, Phase 3.1, Phase 4.1, the embedded
 > file GUI and Sprints 4.2B–4.2D Windows shell, receive approval and native hosted window are delivered.
 > URL/image modules and the remaining v1.0 roadmap are still in progress.
 
@@ -46,8 +46,9 @@ content itself is never logged.
 
 ## Quick start on Windows
 
-Requirements: Go 1.24 or newer and a trusted private LAN. Bearer/peer authentication is optional,
-but TLS is not implemented; enable authentication for LAN deployment and never expose it publicly.
+Requirements: Go 1.24 or newer and a trusted private LAN. Bearer/peer authentication is optional;
+TLS is disabled by default for compatibility and can be enabled with a certificate/private-key pair.
+Enable authentication for LAN deployment and never expose the service publicly.
 
 ```powershell
 Copy-Item configs/config.example.yaml configs/config.yaml
@@ -59,6 +60,16 @@ The default address is `0.0.0.0:8899`. Verify it from the Windows machine:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/health
 ```
+
+Create a redacted support bundle without starting the service:
+
+```powershell
+.\dist\localbridge.exe -support-bundle .\support.zip -config .\configs\config.yaml
+```
+
+The bundle contains only redacted configuration, runtime information and state-file metadata. It
+does not contain tokens, pairing codes, device identity, local paths, TLS certificate/private-key
+paths or contents, payloads, or persisted state bodies. Existing output files are never overwritten.
 
 Then replace `WINDOWS_IP` in [`shortcut/README.md`](shortcut/README.md) and create the Push
 Clipboard and Pull Clipboard Shortcuts.
@@ -87,6 +98,7 @@ on CI and on other platforms.
 | `internal/module` | Stable module lifecycle and route registration |
 | `internal/modules/device` | Device registry, explicit pairing and peer metadata |
 | `internal/transport` | Bounded authenticated HTTP JSON peer transport |
+| `internal/diagnostics` | Redacted support-bundle generation |
 | `internal/syncstore` | Versioned Envelope and durable sync job state |
 | `internal/server` | Standard-library HTTP server and health API |
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
@@ -123,6 +135,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 2.5 delivery](docs/sprints/sprint-2.5.md)
 - [Sprint 2.6 peer-token lifecycle](docs/sprints/sprint-2.6.md)
 - [Sprint 2.7 configuration schema and diagnostics](docs/sprints/sprint-2.7.md)
+- [Sprint 2.8 TLS and certificate pinning](docs/sprints/sprint-2.8.md)
 - [Sprint 3.1 delivery](docs/sprints/sprint-3.1.md)
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
@@ -132,6 +145,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 4.2D native Windows host](docs/sprints/sprint-4.2d.md)
 - [ADR 0009 peer-token lifecycle](docs/adr/0009-peer-token-lifecycle.md)
 - [ADR 0010 versioned effective configuration](docs/adr/0010-versioned-effective-configuration.md)
+- [ADR 0011 TLS transport and certificate pinning](docs/adr/0011-tls-transport-and-certificate-pinning.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

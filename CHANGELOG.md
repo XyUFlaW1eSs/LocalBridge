@@ -22,6 +22,9 @@ All notable changes to LocalBridge are documented here.
   SHA-256 advertisement, v3 secure/legacy peer metadata and v2 registry migration, exact
   certificate-pinned HTTPS peer transport, redirect rejection and scheme-aware GUI/Explorer URLs.
   First-use fingerprint UX, automatic certificate rotation and iPhone trust installation remain future work.
+- Added `-support-bundle` for non-overwriting, owner-readable ZIP reports containing only redacted
+  configuration, runtime information and state-file metadata; credentials, identity, paths, TLS
+  material, payloads and persisted state bodies are excluded.
 - Phase 3 Sprint 3.1: added generic Envelopes, durable sync Jobs, retention bounds and read-only job inspection.
 - Phase 4 Sprint 4.2A: added the embedded `/app/` GUI, browser-safe multi-file shares, persisted
   receive records UI, real local QR PNG generation and versioned settings persistence.

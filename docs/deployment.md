@@ -29,6 +29,12 @@ deployment, add `version: 1` manually. A future version is rejected instead of b
 The `-check-config` command performs the same strict load, prints redacted effective JSON and exits
 without starting the GUI or server.
 
+To collect troubleshooting data without starting the service, run
+`localbridge.exe -support-bundle .\\support.zip -config .\\configs\\config.yaml`. The ZIP contains
+only redacted configuration, runtime information and state-file metadata; it excludes credentials,
+device identity, local paths, TLS key/certificate paths or contents, payloads and state-file bodies.
+The destination must not already exist.
+
 For a LAN deployment, enable the Phase 2 transition authentication before allowing other
 devices to connect:
 

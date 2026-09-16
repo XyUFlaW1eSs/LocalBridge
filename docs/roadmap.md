@@ -90,6 +90,8 @@ Planned work:
 - Sprint 2.8 adds opt-in TLS 1.2+ server transport, HTTPS-only startup, leaf certificate
   fingerprint advertisement, pinned secure peers, explicit HTTP legacy migration and redirect-free
   outbound transport. Initial trust UX, certificate rotation and iPhone trust installation remain future work.
+- The CLI now creates a non-overwriting redacted support bundle containing safe configuration,
+  runtime and state-file metadata without exposing credentials, identity, paths, payloads or state bodies.
 - LAN discovery through mDNS or UDP broadcast, plus manual IP/port fallback.
 - Peer registry with online/last-seen/capability state and network-change recovery.
 - TLS or an equivalent authenticated local channel; no silent downgrade on paired links. Sprint 2.8

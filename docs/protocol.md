@@ -397,6 +397,16 @@ indicates that pairing has not been configured when the pairing endpoint is used
 methods return `405`. Error responses include `request_id` and the same value in
 the `X-Request-ID` response header.
 
+## Support bundle
+
+`localbridge.exe -support-bundle <destination.zip> -config <config-path>` validates and loads the
+configuration, writes a new owner-readable ZIP, and exits without starting the service. The archive
+contains only redacted configuration values, runtime version/platform information, and metadata
+about the registry/sync/files/settings state files (presence, size, modification time, or a bounded
+classification). It never includes tokens, pairing codes, device identity, local paths, TLS
+certificate/private-key paths or contents, payloads, shared/received files, or state-file bodies.
+An existing destination is rejected.
+
 ## Security configuration
 
 ```yaml
