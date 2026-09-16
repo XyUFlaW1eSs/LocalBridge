@@ -12,6 +12,8 @@ collaboration platform.
 - `v0.1.0`: runnable Windows package with foreground diagnostics and bilingual documentation.
 - Phase 4.1: persisted multi-file shares, mobile download/upload pages, HTTP Range,
   Content-Range resume and recovery-safe file storage foundation.
+- Phase 4.2A/4.2B foundation: embedded file GUI, local QR PNG, controlled browser uploads,
+  per-user Windows startup/Explorer synchronization, native tray and completion events.
 
 ## Planned releases
 
@@ -21,10 +23,9 @@ collaboration platform.
   device registry, LAN discovery, diagnostics, shared retry/timeout policy and service/tray design.
 - **Phase 3 / `v0.3.x` — Sync engine and rich clipboard:** generic envelopes, capability
   negotiation, outbound delivery, offline queue, history, images, HTML/RTF and screenshots.
-- **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer foundation and Sprint 4.2A are implemented
-  (persisted shares/receives, embedded GUI, browser-safe multipart sharing, real QR PNG, HTTP Range
-  and resumable Content-Range uploads); URL push, image delivery, notifications, native Windows
-  effects, composite context jobs and broader transfer state remain.
+- **Phase 4 / `v0.4.x` — LAN collaboration:** file transfer, the embedded GUI and the Windows shell
+  foundation are implemented; URL push, image delivery, a native hosted window, receive approval,
+  composite context jobs and broader transfer state remain.
 - **Phase 5 / `v0.5.x` — Clients and devices:** native iOS/iPadOS, Android, macOS, Linux,
   Windows tray/service, CLI, diagnostics web page and multi-device targeting.
 - **Phase 6 / `v0.6.x` — Automation and plugins:** plugin SDK, permissions, hotkeys, browser

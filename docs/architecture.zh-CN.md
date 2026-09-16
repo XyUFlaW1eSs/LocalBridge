@@ -37,8 +37,9 @@ iPhone 不运行持久化监听器。Push 和 Pull 是用户主动触发的快�
 - `internal/modules/clipboard`：剪贴板领域行为与平台接口。Win32 代码通过构建标签隔离。
 - `internal/modules/files`：持久化分享/接收元数据、能力 URL、安全源文件检查、HTTP Range 下载和
   Content-Range 上传。它负责生成接收路径，不依赖剪贴板模块或 GUI 层。
-- `internal/modules/settings`：GUI 偏好的版本化原子 JSON 设置，只保存非敏感意图；Windows 开机自启、托盘和
-  Explorer 效果属于后续原生集成。
+- `internal/modules/settings`：非敏感 GUI 与原生偏好的版本化原子 JSON 设置。
+- `internal/native`：通过构建标签隔离的平台集成。Windows 同步 HKCU 开机启动与 Explorer 注册表、承载托盘消息循环、
+  打开本地 GUI，并消费文件完成事件产生有边界的通知；其他平台编译为空操作适配器。
 - `internal/web`：位于 `/app/` 的内嵌 vanilla HTML/CSS/JS，不依赖 CDN 或网络资源。
 
 ## 生命周期
@@ -72,6 +73,13 @@ Phase 1 剪贴板模块没有出站 HTTP 客户端或对端设备注册表。因
 `POST /api/v1/files/browser-shares`。服务端将每个 part 写入配置的受控分享目录，然后为完整批次创建一条分享记录；
 浏览器不会得到本地路径。分享行从管理 API 获取 JSON 二维码契约和 PNG；接受记录页面合并活跃上传偏移与已完成接收记录。
 设置通过 `/api/v1/settings` 读写；本机回环请求可供 GUI 使用，远程管理仍需要认证。
+
+## Windows 外壳流程
+
+设置成功持久化后，设置存储会通知 `internal/native`。Windows 适配器只同步当前用户注册表键，不需要管理员权限。
+Explorer 使用 `-share` 和一个或多个文件参数调用可执行文件；命令会验证普通文件，优先复用已运行的回环 API，否则启动应用并创建
+一条多文件分享。文件模块只发布包含元数据的 `file.sent` 与 `file.received` 事件；原生适配器显示托盘通知并应用声音设置。
+内嵌 GUI 仍由浏览器承载，因此本切片不包含原生窗口关闭拦截。
 
 ## 扩展规则
 

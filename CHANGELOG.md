@@ -14,8 +14,10 @@ All notable changes to LocalBridge are documented here.
 - Phase 2 Sprint 2.5: added peer health probes and best-effort outbound clipboard delivery for paired LocalBridge peers.
 - Phase 3 Sprint 3.1: added generic Envelopes, durable sync Jobs, retention bounds and read-only job inspection.
 - Phase 4 Sprint 4.2A: added the embedded `/app/` GUI, browser-safe multi-file shares, persisted
-  receive records UI, real local QR PNG generation and versioned settings persistence. Native Windows
-  startup/tray/Explorer effects remain deferred to Sprint 4.2B.
+  receive records UI, real local QR PNG generation and versioned settings persistence.
+- Phase 4 Sprint 4.2B foundation: added owned-share cleanup, per-user Windows startup and Explorer
+  context-menu synchronization, a native tray, multi-file `-share` handling, metadata-only transfer
+  events and completion notifications. Native hosted-window close-to-tray remains pending.
 
 ## [0.1.0] - 2026-08-02
 

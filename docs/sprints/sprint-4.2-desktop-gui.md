@@ -2,7 +2,8 @@
 
 [简体中文](sprint-4.2-desktop-gui.zh-CN.md)
 
-Status: planned; starts only after Sprint 4.1 passes review.
+Status: in progress. Sprint 4.2A and the Sprint 4.2B Windows shell foundation are delivered.
+Native hosted-window close-to-tray behavior and the receive-approval state machine remain open.
 
 ## Goal
 
@@ -42,3 +43,11 @@ context-menu installation; the backend remains independently runnable for CLI/he
 - Closing the shell follows the configured close-to-tray policy; tray exit stops the process.
 - An iPhone can open the same share/receive page and use native browser save/share behavior.
 
+## Delivery split
+
+- Sprint 4.2A delivered the embedded browser GUI, local QR generation, multi-file shares,
+  receive history, settings persistence and browser-safe upload/download workflows.
+- Sprint 4.2B foundation delivered the current-user startup and Explorer registry effects,
+  native tray controls, completion notifications and Explorer multi-file share command.
+- The remaining 4.2 work is a native hosted window that can enforce close-to-tray and an
+  explicit approve/reject workflow when automatic receive is disabled.

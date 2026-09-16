@@ -22,11 +22,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
 | `v0.2.x` | Phase 2 | In progress | Sprint 2.1 request IDs/capabilities/authentication delivered; trust, discovery and production foundation remain |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
-<<<<<<< HEAD
-| `v0.4.x` | Phase 4 | In progress | Resumable file sharing, mobile transfer pages and desktop GUI foundation |
-=======
-| `v0.4.x` | Phase 4 | In progress | Sprint 4.2A embedded GUI, browser-safe file shares, real QR PNG and settings delivered; URL/image/notification/native OS work remains |
->>>>>>> 0dab233 (feat(gui): add embedded browser sharing interface)
+| `v0.4.x` | Phase 4 | In progress | Sprint 4.2A GUI plus the 4.2B Windows startup/tray/Explorer foundation are delivered; URL/image/native-window work remains |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
 | `v0.6.x` | Phase 6 | Planned | Automation, tray/service UX and plugin SDK |
 | `v1.0.0` | Phase 7 | Planned | Stable protocol, secure defaults and upgradeable releases |
@@ -117,13 +113,15 @@ Exit criteria: a paired phone or desktop client receives a Windows clipboard cha
 authenticated outbound path; rich content degrades safely; history survives a configured
 restart policy; duplicate and conflict tests pass.
 
-### Phase 4 — LAN collaboration modules (in progress; Sprint 4.1 delivered)
+### Phase 4 — LAN collaboration modules (in progress; Sprint 4.2B foundation delivered)
 
 Goal: move work context, not only clipboard text.
 
 Sprint 4.2A delivered the embedded browser GUI, safe multipart multi-file sharing, receive-record
-views, real local QR PNG generation and versioned settings persistence. Sprint 4.2B remains for
-Windows startup/tray/Explorer effects and broader native UX.
+views, real local QR PNG generation and versioned settings persistence. The Sprint 4.2B foundation
+now applies per-user Windows startup and Explorer settings, provides a native tray, accepts Explorer
+multi-file share commands, and emits bounded completion notifications. A native hosted window with
+close-to-tray semantics and receive approval remains before the desktop experience is complete.
 
 Planned modules:
 

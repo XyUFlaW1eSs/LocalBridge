@@ -44,8 +44,10 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/modules/files`: persisted share/receive metadata, capability URLs, safe source-file
   inspection, HTTP Range downloads and Content-Range uploads. It owns generated receive paths and
   does not depend on the clipboard module or GUI layer.
-- `internal/modules/settings`: versioned atomic JSON settings for GUI preferences. It stores only
-  non-secret intent; Windows startup/tray/Explorer effects remain a later native integration.
+- `internal/modules/settings`: versioned atomic JSON settings for non-secret GUI and native preferences.
+- `internal/native`: build-tagged platform integration. Windows synchronizes HKCU startup and
+  Explorer keys, hosts the tray/message loop, opens the local GUI, and consumes file completion
+  events for bounded notifications. Other platforms compile a no-op adapter.
 - `internal/web`: embedded vanilla HTML/CSS/JS at `/app/`, with no CDN or network asset dependency.
 
 ## Lifecycle
@@ -84,6 +86,16 @@ the browser never receives a local path. Share rows fetch the JSON QR contract a
 management API. Receive history combines active upload offsets with completed receive records.
 Settings are read and written through `/api/v1/settings`; local loopback requests are allowed for
 the GUI while remote management still requires authentication.
+
+## Windows shell flow
+
+The settings store notifies `internal/native` after a successful durable write. On Windows the
+adapter synchronizes only current-user registry keys; it never requires elevation. Explorer invokes
+the executable with `-share` and one or more file arguments. The command validates regular files,
+prefers the already-running loopback API, and otherwise starts the application and creates one
+multi-file share. File modules publish metadata-only `file.sent` and `file.received` events; the
+native adapter shows a tray notification and applies the configured sound policy. The embedded GUI
+is still browser-hosted, so native window close interception is not part of this slice.
 
 ## Extension rule
 

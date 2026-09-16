@@ -281,8 +281,16 @@ neutral contract. Both endpoints return `404` after share expiration.
 `GET /api/v1/settings` reads, `PUT /api/v1/settings` replaces, and `POST /api/v1/settings/reset`
 restores the versioned non-secret GUI settings document. Fields are `auto_start`,
 `minimize_to_tray`, `explorer_context_menu`, `auto_accept`, `notification_sound`, `send_sound`
-and `receive_sound`. The store is atomically written with mode `0600`; OS effects are not claimed
-until Sprint 4.2B. `/app/` is served from Go-embedded static resources and has no external assets.
+and `receive_sound`. The store is atomically written with mode `0600`. On Windows, successful
+settings writes synchronize the current-user startup and Explorer keys. `minimize_to_tray` and
+`auto_accept` remain inactive until the native-window and approval flows exist. `/app/` is served
+from Go-embedded static resources and has no external assets.
+
+The Windows Explorer verb launches `localbridge.exe -share <file> [file...]`. Arguments must resolve
+to distinct regular, non-symlink files. A selection creates one share batch. The command first uses
+the loopback management API of an existing process and otherwise starts LocalBridge. Transfer
+completion is announced internally as `file.sent` or `file.received`; event data contains IDs,
+counts and sizes, never file content or local paths.
 
 ## Errors
 

@@ -6,9 +6,9 @@ LocalBridge is a lightweight, local-first LAN collaboration platform. Its first 
 module synchronizes text clipboard content between a Windows PC and an iPhone through two
 iPhone Shortcuts. No cloud account or relay service is required.
 
-> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1 and Phase 4.1 file-transfer
-> foundation are delivered. The Windows GUI, QR image rendering, tray/settings integration and
-> URL/image/notification modules are still in progress.
+> Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1, Phase 4.1, the embedded
+> file GUI and the Sprint 4.2B Windows shell foundation are delivered. URL/image modules,
+> native hosted-window close-to-tray behavior and the remaining v1.0 roadmap are still in progress.
 
 ## What it does
 
@@ -33,7 +33,9 @@ The local Web GUI is available at `http://127.0.0.1:8899/app/`. It provides file
 receive history and persisted settings. The browser uploads multipart files into the server's
 controlled `files.share_dir`; it never sends or displays a real local path. The share page has
 drag/drop and multi-select support, expandable file rows, URL copy and an offline-generated PNG
-QR code. Native Windows startup, tray and Explorer integration are deferred to Sprint 4.2B.
+QR code. Windows now has per-user startup and Explorer context-menu synchronization, a native tray,
+multi-file `-share` handling, and completion notifications. The GUI is still browser-hosted, so the
+`minimize_to_tray` setting is persisted but cannot yet intercept a browser window's close button.
 
 Runtime logs are written to the current console. Use `scripts/run.ps1` to run a release package
 in the foreground and see Push, Pull, deduplication and clipboard-write diagnostics. Clipboard
@@ -87,6 +89,7 @@ on CI and on other platforms.
 | `internal/modules/clipboard` | Clipboard API, deduplication and platform adapter |
 | `internal/modules/files` | Share/receive storage, Range transfer, browser upload and QR PNG |
 | `internal/modules/settings` | Versioned non-secret GUI settings store and API |
+| `internal/native` | Windows startup, Explorer command, tray and completion-notification adapter |
 | `internal/web` | Embedded vanilla HTML/CSS/JS GUI, no CDN |
 | `docs` | Architecture, protocol, deployment and development standards |
 | `shortcut` | iPhone Shortcut setup and payload examples |
@@ -118,6 +121,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 4.1 file transfer](docs/sprints/sprint-4.1-file-transfer.md)
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
 - [Sprint 4.2A delivery](docs/sprints/sprint-4.2a.md)
+- [Sprint 4.2B Windows shell foundation](docs/sprints/sprint-4.2b.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

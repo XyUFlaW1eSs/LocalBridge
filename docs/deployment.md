@@ -81,9 +81,11 @@ authentication is enabled, local loopback management requests remain available t
 LAN management clients still require a bearer or paired peer token.
 
 The GUI settings document is stored at `settings.store_path` (default `data/settings.json`). It is
-versioned, non-secret and atomically written with restrictive permissions. The settings currently
-provide the contract for future startup, tray, Explorer context-menu, auto-accept and sound behavior;
-Windows native effects are intentionally deferred to Sprint 4.2B. The QR image is generated locally
+versioned, non-secret and atomically written with restrictive permissions. On Windows, `auto_start`
+and `explorer_context_menu` now synchronize current-user HKCU keys, while the native tray exposes
+share/receive/settings/exit actions. File completion events can produce tray notifications and sounds.
+`minimize_to_tray` and `auto_accept` remain persisted contracts until a native hosted window and
+receive-approval workflow are delivered. The QR image is generated locally
 with the MIT-licensed `github.com/skip2/go-qrcode` dependency, so deployment does not require a CDN
 or public QR service.
 
@@ -100,12 +102,14 @@ From the iPhone, use the Windows private IPv4 address in the Shortcut URL. Test 
 Pull, then copy text directly on Windows and confirm the latest endpoint changes after the
 watch interval.
 
-## 5. Service installation
+## 5. Windows shell integration
 
-Native Windows service, startup and tray integration is intentionally not part of Sprint 4.2A.
-For a first deployment, run the executable from a supervised user session because Windows
-clipboard access belongs to the interactive desktop session. Sprint 4.2B must preserve that
-session requirement and document the security boundary before applying OS effects.
+Enable **Start with Windows** or **Explorer context menu** in `/app/#settings` to create per-user
+HKCU entries; no administrator rights are required. Explorer invokes `localbridge.exe -share <files>`
+and the command reuses a running loopback service when possible. The tray menu opens each GUI section
+or requests graceful shutdown. Keep the process in an interactive user session because clipboard and
+tray access belong to that desktop. This is not a Windows Service and the GUI is still browser-hosted;
+closing the browser does not invoke `minimize_to_tray` yet.
 
 ## Rollback
 

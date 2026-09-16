@@ -12,7 +12,8 @@
 - Phase 2 Sprint 2.5：增加对端健康探测，以及面向已配对 LocalBridge 对端的尽力而为剪贴板出站投递。
 - Phase 3 Sprint 3.1：增加通用 Envelope、持久化同步 Job、保留边界和只读任务查询接口。
 - Phase 4 Sprint 4.2A：增加内嵌 `/app/` GUI、浏览器安全多文件分享、接收记录界面、本地真实二维码 PNG 生成和版本化设置持久化。
-  Windows 原生开机启动/托盘/Explorer 效果推迟到 Sprint 4.2B。
+- Phase 4 Sprint 4.2B 基础：增加归属分享文件清理、当前用户级 Windows 开机启动与 Explorer 右键菜单同步、原生托盘、
+  多文件 `-share` 入口、仅元数据的传输事件和完成通知。原生宿主窗口关闭最小化到托盘仍待实现。
 
 ## [0.1.0] - 2026-08-02
 

@@ -248,8 +248,12 @@ multipart 元数据，字节写入 `files.share_dir` 下，完整多选批次创
 
 `GET /api/v1/settings` 读取、`PUT /api/v1/settings` 替换、`POST /api/v1/settings/reset` 恢复版本化的非敏感 GUI 设置。
 字段包括 `auto_start`、`minimize_to_tray`、`explorer_context_menu`、`auto_accept`、`notification_sound`、`send_sound` 和
-`receive_sound`。设置以 `0600` 权限原子写入；在 Sprint 4.2B 前不宣称已经产生 Windows 系统效果。`/app/` 来自 Go 内嵌静态资源，
-不依赖外部资源。
+`receive_sound`。设置以 `0600` 权限原子写入。在 Windows 上，设置成功写入后会同步当前用户开机启动与 Explorer 注册表项；
+`minimize_to_tray` 和 `auto_accept` 在原生窗口与确认流程完成前仍不生效。`/app/` 来自 Go 内嵌静态资源，不依赖外部资源。
+
+Windows Explorer 动词使用 `localbridge.exe -share <file> [file...]`。参数必须解析为互不重复的普通非符号链接文件，一次选择创建
+一条分享批次。命令先尝试使用现有进程的回环管理 API，否则启动 LocalBridge。传输完成在进程内发布为 `file.sent` 或
+`file.received`；事件数据只包含 ID、数量和大小，不包含文件内容或本地路径。
 
 ## 错误
 

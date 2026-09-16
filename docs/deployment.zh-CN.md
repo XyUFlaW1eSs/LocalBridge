@@ -69,8 +69,9 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 （默认 `data/shared`），不会使用客户端提供的本地路径。启用认证后，本机回环管理请求仍供本地 GUI 使用；局域网管理客户端仍
 必须提供 Bearer Token 或已配对的 peer Token。
 
-GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是版本化、非敏感、以严格权限原子写入的文档。当前设置为未来的
-开机启动、托盘、Explorer 右键菜单、自动接收和声音行为提供契约；Windows 原生效果明确推迟到 Sprint 4.2B。二维码图片由 MIT
+GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是版本化、非敏感、以严格权限原子写入的文档。在 Windows 上，
+`auto_start` 与 `explorer_context_menu` 现会同步当前用户 HKCU 注册表；原生托盘提供分享、接收记录、设置与退出操作。文件完成事件
+可以产生托盘通知和声音。`minimize_to_tray` 与 `auto_accept` 仍只是持久化契约，需等待原生宿主窗口和接收确认流程。二维码图片由 MIT
 许可的 `github.com/skip2/go-qrcode` 在本地生成，部署不需要 CDN 或公网二维码服务。
 
 需要持续查看日志时，请在 PowerShell 中运行：
@@ -85,10 +86,12 @@ GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是
 在 iPhone 上将快捷指令 URL 设置为 Windows 私有 IPv4 地址。依次测试 Push、Pull，然后在 Windows 上直接复制
 文本，并在等待监听间隔后确认 latest 接口已更新。
 
-## 5. 服务安装
+## 5. Windows 外壳集成
 
-Windows 原生服务、开机启动和托盘集成明确不属于 Sprint 4.2A。首次部署时应在受监管的用户会话中运行程序，因为 Windows
-剪贴板访问属于交互式桌面会话。Sprint 4.2B 在产生系统效果前必须保留这一会话要求，并记录安全边界。
+在 `/app/#settings` 中启用“开机自启”或“Explorer 右键菜单”会创建当前用户 HKCU 项，不需要管理员权限。Explorer 使用
+`localbridge.exe -share <files>` 调用程序，并尽可能复用正在运行的回环服务。托盘菜单可打开各 GUI 区域或请求优雅退出。
+程序必须运行在交互式用户会话，因为剪贴板和托盘属于该桌面。这不是 Windows Service，GUI 仍由浏览器承载；关闭浏览器暂时不会触发
+`minimize_to_tray`。
 
 ## 回滚
 
