@@ -12,9 +12,10 @@ import (
 const maxStoreBytes = 64 * 1024
 
 type Store struct {
-	path  string
-	mu    sync.RWMutex
-	value Settings
+	path      string
+	mu        sync.RWMutex
+	value     Settings
+	listeners []func(Settings)
 }
 
 func NewStore(path string) (*Store, error) {
@@ -34,15 +35,32 @@ func (s *Store) Get() Settings {
 	return s.value
 }
 
+// AddListener registers a best-effort callback for settings changes. The
+// callback runs after the new value has been persisted and is never invoked
+// while the store lock is held.
+func (s *Store) AddListener(listener func(Settings)) {
+	if listener == nil {
+		return
+	}
+	s.mu.Lock()
+	s.listeners = append(s.listeners, listener)
+	s.mu.Unlock()
+}
+
 func (s *Store) Set(value Settings) (Settings, error) {
 	value.Version = version
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	old := s.value
 	s.value = value
 	if err := s.saveLocked(); err != nil {
 		s.value = old
+		s.mu.Unlock()
 		return Settings{}, err
+	}
+	listeners := append([]func(Settings){}, s.listeners...)
+	s.mu.Unlock()
+	for _, listener := range listeners {
+		listener(value)
 	}
 	return value, nil
 }
