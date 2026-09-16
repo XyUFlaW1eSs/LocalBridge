@@ -127,6 +127,7 @@ type platformBackend struct {
 	done      chan struct{}
 	stop      chan struct{}
 	className *uint16
+	host      *windowsHost
 }
 
 func newBackend(cfg Config, logger *slog.Logger) (backend, error) {
@@ -141,7 +142,13 @@ func newBackend(cfg Config, logger *slog.Logger) (backend, error) {
 	if executable, err := filepath.Abs(executable); err == nil {
 		cfg.Executable = executable
 	}
-	return &platformBackend{cfg: cfg, logger: logger, registry: NewWindowsRegistry(), done: make(chan struct{}), stop: make(chan struct{})}, nil
+	b := &platformBackend{cfg: cfg, logger: logger, registry: NewWindowsRegistry(), done: make(chan struct{}), stop: make(chan struct{})}
+	b.host = newWindowsHost(logger, func() bool {
+		b.mu.RLock()
+		defer b.mu.RUnlock()
+		return b.settings.MinimizeToTray
+	}, cfg.OnExit)
+	return b, nil
 }
 
 func (b *platformBackend) ApplySettings(value settings.Settings) error {
@@ -170,7 +177,7 @@ func (b *platformBackend) Stop(ctx context.Context) error {
 	b.requestStop()
 	select {
 	case <-b.done:
-		return nil
+		return b.host.Stop(ctx)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -187,11 +194,12 @@ func (b *platformBackend) requestStop() {
 		if hwnd != 0 {
 			_, _, _ = procPostMessageW.Call(hwnd, wmClose, 0, 0)
 		}
+		b.host.RequestStop()
 	}
 }
 
 func (b *platformBackend) Notify(event eventbus.Event, value settings.Settings) {
-	if event.Type != eventbus.FileReceived && event.Type != eventbus.FileSent {
+	if event.Type != eventbus.FileReceived && event.Type != eventbus.FileSent && event.Type != eventbus.FileReceiveRequested {
 		return
 	}
 	b.mu.RLock()
@@ -220,8 +228,7 @@ func (b *platformBackend) Notify(event eventbus.Event, value settings.Settings) 
 }
 
 func (b *platformBackend) OpenGUI(view string) error {
-	b.openGUI(view)
-	return nil
+	return b.openGUI(view)
 }
 
 func (b *platformBackend) trayLoop() {
@@ -285,16 +292,16 @@ func (b *platformBackend) wndProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case wmRButtonUp:
 			b.showMenu(hwnd)
 		case wmLButtonDblClk:
-			b.openGUI("shares")
+			_ = b.openGUI("shares")
 		}
 	case wmCommand:
 		switch wparam & 0xffff {
 		case menuOpenShare:
-			b.openGUI("shares")
+			_ = b.openGUI("shares")
 		case menuOpenReceive:
-			b.openGUI("receives")
+			_ = b.openGUI("receives")
 		case menuOpenSettings:
-			b.openGUI("settings")
+			_ = b.openGUI("settings")
 		case menuExit:
 			if b.cfg.OnExit != nil {
 				b.cfg.OnExit()
@@ -356,7 +363,7 @@ func (b *platformBackend) showMenu(hwnd uintptr) {
 	_, _, _ = procPostMessageW.Call(hwnd, wmNull, 0, 0)
 }
 
-func (b *platformBackend) openGUI(view string) {
+func (b *platformBackend) openGUI(view string) error {
 	url := b.cfg.GUIURL
 	if url == "" {
 		url = "http://127.0.0.1:8899/app/"
@@ -366,11 +373,13 @@ func (b *platformBackend) openGUI(view string) {
 	}
 	if b.cfg.OnOpenGUI != nil {
 		if err := b.cfg.OnOpenGUI(url); err != nil {
-			b.logger.Warn("open native GUI failed", "error", err)
+			return err
 		}
-		return
+		return nil
 	}
-	if err := OpenURL(url); err != nil {
-		b.logger.Warn("open browser GUI failed", "error", err)
+	if err := b.host.Open(url); err != nil {
+		b.logger.Warn("native WebView2 GUI unavailable; opening browser", "error", err)
+		return OpenURL(url)
 	}
+	return nil
 }

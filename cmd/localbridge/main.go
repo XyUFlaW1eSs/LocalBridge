@@ -71,6 +71,8 @@ func main() {
 		} else if err := runtime.OpenGUI("shares"); err != nil {
 			runtime.Logger().Warn("failed to open file-share GUI", "error", err)
 		}
+	} else if err := runtime.OpenGUI(""); err != nil {
+		runtime.Logger().Warn("failed to open GUI", "error", err)
 	}
 	select {
 	case <-ctx.Done():
