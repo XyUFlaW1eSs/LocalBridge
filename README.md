@@ -7,7 +7,7 @@ module synchronizes text clipboard content between a Windows PC and an iPhone th
 iPhone Shortcuts. No cloud account or relay service is required.
 
 > Status: Phase 0, Phase 1 / Sprint 1, Phase 2 foundation, Phase 3.1, Phase 4.1, the embedded
-> file GUI and the Sprint 4.2B Windows shell foundation are delivered. URL/image modules,
+> file GUI, the Sprint 4.2B Windows shell foundation and Sprint 4.2C receive approval are delivered. URL/image modules,
 > native hosted-window close-to-tray behavior and the remaining v1.0 roadmap are still in progress.
 
 ## What it does
@@ -36,6 +36,8 @@ drag/drop and multi-select support, expandable file rows, URL copy and an offlin
 QR code. Windows now has per-user startup and Explorer context-menu synchronization, a native tray,
 multi-file `-share` handling, and completion notifications. The GUI is still browser-hosted, so the
 `minimize_to_tray` setting is persisted but cannot yet intercept a browser window's close button.
+When `auto_accept` is disabled, incoming file metadata waits in Receive History for an explicit
+approve/reject decision before any file bytes are accepted; the mobile page continues after approval.
 
 Runtime logs are written to the current console. Use `scripts/run.ps1` to run a release package
 in the foreground and see Push, Pull, deduplication and clipboard-write diagnostics. Clipboard
@@ -122,6 +124,7 @@ expose port 8899 or share URLs to the public internet.
 - [Sprint 4.2 desktop GUI](docs/sprints/sprint-4.2-desktop-gui.md)
 - [Sprint 4.2A delivery](docs/sprints/sprint-4.2a.md)
 - [Sprint 4.2B Windows shell foundation](docs/sprints/sprint-4.2b.md)
+- [Sprint 4.2C receive approval](docs/sprints/sprint-4.2c.md)
 - [Product plan and capability map](docs/product-plan.md)
 - [File sharing product plan](docs/file-sharing-product-plan.md)
 - [Engineering workflow and agent responsibilities](docs/engineering-workflow.md)

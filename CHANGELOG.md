@@ -18,6 +18,8 @@ All notable changes to LocalBridge are documented here.
 - Phase 4 Sprint 4.2B foundation: added owned-share cleanup, per-user Windows startup and Explorer
   context-menu synchronization, a native tray, multi-file `-share` handling, metadata-only transfer
   events and completion notifications. Native hosted-window close-to-tray remains pending.
+- Phase 4 Sprint 4.2C: added persisted pending/active/rejected upload states, loopback/authenticated
+  approve/reject endpoints, Windows receive-request notifications and a mobile wait-and-resume flow.
 
 ## [0.1.0] - 2026-08-02
 

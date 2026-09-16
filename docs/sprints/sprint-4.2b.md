@@ -50,6 +50,6 @@ effects without requiring administrator privileges or coupling feature modules t
 
 The UI remains the embedded page opened in the user's browser. There is no WebView2/native hosted
 window yet, so a browser close button cannot be converted into “minimize to tray”; the setting is
-retained but inactive. `auto_accept` likewise requires a pending-receive/approval state machine.
-The next desktop slice must implement those two behaviors and perform an interactive Windows tray,
+retained but inactive. The pending-receive/approval state machine was delivered in Sprint 4.2C.
+The next desktop slice must implement hosted-window behavior and perform an interactive Windows tray,
 registry and Explorer smoke test before claiming full Sprint 4.2 completion.

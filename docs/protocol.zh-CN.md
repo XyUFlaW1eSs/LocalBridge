@@ -213,7 +213,9 @@ Bearer Token 或 peer Token。即使 `security.auth_enabled` 为 `false`，所�
 `X-Content-SHA256`。
 
 接收 URL 是 `GET /receive/{token}`。页面使用 `POST /receive/{token}/uploads` 发送
-`{"name":"photo.jpg","size":123456,"sha256":"<可选的小写 sha256>"}`，再使用
+`{"name":"photo.jpg","size":123456,"sha256":"<可选的小写 sha256>"}`。当 `auto_accept` 为 false 时，创建返回
+`202` 与 `pending` 状态；页面轮询状态接口，Windows 用户批准前不会发送文件字节。仅本机回环或已认证管理客户端可调用
+`POST /api/v1/files/uploads/{upload_id}/approve` 或 `/reject`。批准后状态为 `active`，拒绝为终态 `rejected`。活动上传再使用
 `PUT /receive/{token}/uploads/{upload_id}` 和 `Content-Range: bytes start-end/total` 上传分片。单片最多 16 MiB，
 且必须连续；对已保存范围重复发送相同字节是幂等的，跳过偏移或冲突重放返回 `409`。完成时校验声明的 SHA-256，
 然后将生成的临时文件移动到 `files.receive_dir`。上传创建同样支持 `Idempotency-Key`。
@@ -229,7 +231,7 @@ Bearer Token 或 peer Token。即使 `security.auth_enabled` 为 `false`，所�
 {"version":1,"type":"localbridge.share","url":"http://192.168.1.10:8899/share/<token>","expires_at":"..."}
 ```
 
-未来 GUI 应在本地将 `url` 编码为二维码。本 Sprint 只提供契约，占位接口不代表离线二维码图片已经完成。
+GUI 会在本地将 `url` 编码为 PNG 二维码；`GET /api/v1/files/shares/{id}/qr.png` 返回该图片，不依赖公网二维码服务。
 
 安全限制在存储前执行：源文件必须是普通且非符号链接文件；单文件、单次分享、接收配额和文件数限制由 `files.*` 控制；
 上传名称不能包含路径分隔符、控制字符或 `..`；接收路径由随机 ID 生成，客户端不能提供。Token 会过期且不会写入日志。
@@ -249,7 +251,7 @@ multipart 元数据，字节写入 `files.share_dir` 下，完整多选批次创
 `GET /api/v1/settings` 读取、`PUT /api/v1/settings` 替换、`POST /api/v1/settings/reset` 恢复版本化的非敏感 GUI 设置。
 字段包括 `auto_start`、`minimize_to_tray`、`explorer_context_menu`、`auto_accept`、`notification_sound`、`send_sound` 和
 `receive_sound`。设置以 `0600` 权限原子写入。在 Windows 上，设置成功写入后会同步当前用户开机启动与 Explorer 注册表项；
-`minimize_to_tray` 和 `auto_accept` 在原生窗口与确认流程完成前仍不生效。`/app/` 来自 Go 内嵌静态资源，不依赖外部资源。
+`auto_accept` 会立即控制等待确认流程，`minimize_to_tray` 在原生宿主窗口完成前仍不生效。`/app/` 来自 Go 内嵌静态资源，不依赖外部资源。
 
 Windows Explorer 动词使用 `localbridge.exe -share <file> [file...]`。参数必须解析为互不重复的普通非符号链接文件，一次选择创建
 一条分享批次。命令先尝试使用现有进程的回环管理 API，否则启动 LocalBridge。传输完成在进程内发布为 `file.sent` 或

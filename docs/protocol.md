@@ -234,8 +234,12 @@ from `GET /share/{token}/files/{file_id}` and support HTTP `Range` requests for 
 includes `Accept-Ranges: bytes` and `X-Content-SHA256`.
 
 The receive URL is `GET /receive/{token}`. Its mobile page uses `POST /receive/{token}/uploads` with
-`{"name":"photo.jpg","size":123456,"sha256":"<optional lowercase sha256>"}`, then sends chunks
-to `PUT /receive/{token}/uploads/{upload_id}` using `Content-Range: bytes start-end/total`. Chunks
+`{"name":"photo.jpg","size":123456,"sha256":"<optional lowercase sha256>"}`. If `auto_accept` is
+false, creation returns `202` with status `pending`; the page polls the status endpoint and sends no
+file bytes until the Windows user approves it. Loopback or authenticated management clients use
+`POST /api/v1/files/uploads/{upload_id}/approve` or `/reject`. Approval changes the status to `active`;
+rejection is terminal and returns status `rejected`. Active uploads send chunks to
+`PUT /receive/{token}/uploads/{upload_id}` using `Content-Range: bytes start-end/total`. Chunks
 are limited to 16 MiB and must be contiguous. Replaying an already stored range with identical bytes
 is idempotent; gaps or conflicting replays return `409`. Completion verifies the declared SHA-256
 before moving the generated temporary file into `files.receive_dir`. Upload creation also supports
@@ -282,8 +286,9 @@ neutral contract. Both endpoints return `404` after share expiration.
 restores the versioned non-secret GUI settings document. Fields are `auto_start`,
 `minimize_to_tray`, `explorer_context_menu`, `auto_accept`, `notification_sound`, `send_sound`
 and `receive_sound`. The store is atomically written with mode `0600`. On Windows, successful
-settings writes synchronize the current-user startup and Explorer keys. `minimize_to_tray` and
-`auto_accept` remain inactive until the native-window and approval flows exist. `/app/` is served
+settings writes synchronize the current-user startup and Explorer keys. `auto_accept` controls the
+pending approval workflow immediately; `minimize_to_tray` remains inactive until a native hosted
+window exists. `/app/` is served
 from Go-embedded static resources and has no external assets.
 
 The Windows Explorer verb launches `localbridge.exe -share <file> [file...]`. Arguments must resolve

@@ -6,7 +6,7 @@ LocalBridge 是一个轻量、以本地网络为优先的局域网协作平台�
 快捷指令，在 Windows 电脑与 iPhone 之间同步文本剪贴板内容。不需要云账号或中继服务。
 
 > 状态：Phase 0、Phase 1 / Sprint 1、Phase 2 基础、Phase 3.1、Phase 4.1、内嵌文件 GUI 与
-> Sprint 4.2B Windows 外壳基础已交付。URL/图片模块、原生宿主窗口关闭最小化语义和其余 v1.0 路线仍在开发中。
+> Sprint 4.2B Windows 外壳基础与 Sprint 4.2C 接收确认已交付。URL/图片模块、原生宿主窗口关闭最小化语义和其余 v1.0 路线仍在开发中。
 
 ## 功能概览
 
@@ -29,6 +29,7 @@ Windows 本地剪贴板变化目前不会主动向 iPhone 发 HTTP 请求。它�
 上传到服务端受控的 `files.share_dir`，不会发送或显示真实本地路径。分享页支持拖拽、多选、可展开文件行、复制 URL 和
 离线生成 PNG 二维码。Windows 现已支持当前用户级开机启动与 Explorer 右键菜单同步、原生托盘、多文件 `-share` 入口和完成通知。
 GUI 仍由浏览器承载，因此 `minimize_to_tray` 设置虽然会持久化，但暂时不能拦截浏览器窗口的关闭按钮。
+关闭 `auto_accept` 后，传入文件会先在“接受记录”等待明确的允许/拒绝；批准前不会接收文件字节，手机页面会在批准后继续。
 
 运行日志会输出到当前控制台。发布包可使用 `scripts/run.ps1` 前台运行，这样能看到每次 Push、Pull、去重和
 剪贴板写入的诊断信息；日志不会记录剪贴板正文。
@@ -110,6 +111,7 @@ go build ./cmd/localbridge
 - [Sprint 4.2 桌面 GUI](docs/sprints/sprint-4.2-desktop-gui.zh-CN.md)
 - [Sprint 4.2A 交付](docs/sprints/sprint-4.2a.zh-CN.md)
 - [Sprint 4.2B Windows 外壳基础](docs/sprints/sprint-4.2b.zh-CN.md)
+- [Sprint 4.2C 接收确认](docs/sprints/sprint-4.2c.zh-CN.md)
 - [产品规划与能力地图](docs/product-plan.zh-CN.md)
 - [文件分享产品计划](docs/file-sharing-product-plan.zh-CN.md)
 - [工程流程与子任务职责](docs/engineering-workflow.zh-CN.md)

@@ -84,8 +84,9 @@ The GUI settings document is stored at `settings.store_path` (default `data/sett
 versioned, non-secret and atomically written with restrictive permissions. On Windows, `auto_start`
 and `explorer_context_menu` now synchronize current-user HKCU keys, while the native tray exposes
 share/receive/settings/exit actions. File completion events can produce tray notifications and sounds.
-`minimize_to_tray` and `auto_accept` remain persisted contracts until a native hosted window and
-receive-approval workflow are delivered. The QR image is generated locally
+`auto_accept` is enforced: when disabled, new uploads remain pending until approved or rejected in
+Receive History; no file bytes are accepted while pending. `minimize_to_tray` remains a persisted
+contract until a native hosted window is delivered. The QR image is generated locally
 with the MIT-licensed `github.com/skip2/go-qrcode` dependency, so deployment does not require a CDN
 or public QR service.
 

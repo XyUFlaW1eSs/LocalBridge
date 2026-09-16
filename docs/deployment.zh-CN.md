@@ -71,7 +71,8 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/capabilities `
 
 GUI 设置保存于 `settings.store_path`（默认 `data/settings.json`），是版本化、非敏感、以严格权限原子写入的文档。在 Windows 上，
 `auto_start` 与 `explorer_context_menu` 现会同步当前用户 HKCU 注册表；原生托盘提供分享、接收记录、设置与退出操作。文件完成事件
-可以产生托盘通知和声音。`minimize_to_tray` 与 `auto_accept` 仍只是持久化契约，需等待原生宿主窗口和接收确认流程。二维码图片由 MIT
+可以产生托盘通知和声音。`auto_accept` 已生效：关闭时，新上传在“接受记录”等待允许或拒绝，等待期间不会接收文件字节。
+`minimize_to_tray` 仍需等待原生宿主窗口。二维码图片由 MIT
 许可的 `github.com/skip2/go-qrcode` 在本地生成，部署不需要 CDN 或公网二维码服务。
 
 需要持续查看日志时，请在 PowerShell 中运行：

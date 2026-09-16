@@ -12,8 +12,8 @@ collaboration platform.
 - `v0.1.0`: runnable Windows package with foreground diagnostics and bilingual documentation.
 - Phase 4.1: persisted multi-file shares, mobile download/upload pages, HTTP Range,
   Content-Range resume and recovery-safe file storage foundation.
-- Phase 4.2A/4.2B foundation: embedded file GUI, local QR PNG, controlled browser uploads,
-  per-user Windows startup/Explorer synchronization, native tray and completion events.
+- Phase 4.2A–4.2C: embedded file GUI, local QR PNG, controlled browser uploads, per-user Windows
+  startup/Explorer synchronization, native tray, completion events and explicit receive approval.
 
 ## Planned releases
 
