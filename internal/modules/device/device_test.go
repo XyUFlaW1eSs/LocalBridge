@@ -26,9 +26,15 @@ import (
 
 type registryTestProtector struct {
 	failProtect bool
+	name        string
 }
 
-func (registryTestProtector) Name() string    { return "test-protector" }
+func (p registryTestProtector) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "test-protector"
+}
 func (registryTestProtector) Available() bool { return true }
 func (p registryTestProtector) Protect(purpose string, plaintext []byte) ([]byte, error) {
 	if p.failProtect {
@@ -274,6 +280,107 @@ func TestRegistryV3MigratesToProtectedV4AndRestarts(t *testing.T) {
 	}
 	if !reloaded.ValidatePeerToken(currentToken) || !reloaded.ValidatePeerToken(previousToken) {
 		t.Fatal("protected tokens did not survive restart")
+	}
+}
+
+func TestRegistryV4DisabledUpgradesToProtectedWithBothTokenGenerations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	currentToken := "v4-current-plaintext-token"
+	previousToken := "v4-previous-plaintext-token"
+	original := []byte(`{"version":4,"credential_protection":"disabled","peers":[{"id":"phone","name":"Phone","status":"paired","secure":false,"scheme":"http","token":"` + currentToken + `","token_issued_at":"2026-01-01T00:00:00Z","token_expires_at":"2099-01-01T00:00:00Z","previous_token":"` + previousToken + `","previous_token_expires_at":"2099-01-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.ValidatePeerToken(currentToken) || !m.ValidatePeerToken(previousToken) {
+		t.Fatal("both token generations were not valid after v4 protection upgrade")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(data, original) {
+		t.Fatal("v4 disabled registry was not upgraded")
+	}
+	text := string(data)
+	if strings.Contains(text, currentToken) || strings.Contains(text, previousToken) || strings.Contains(text, `"token":`) || strings.Contains(text, `"previous_token":`) {
+		t.Fatalf("upgraded v4 registry contains plaintext tokens: %s", text)
+	}
+	if !strings.Contains(text, `"credential_protection": "test-protector"`) || strings.Count(text, `token_ciphertext`) != 2 {
+		t.Fatalf("v4 registry does not contain both protected token slots: %s", text)
+	}
+}
+
+func TestProtectedRegistryV4RejectsDisabledAndDifferentProviderWithoutRewrite(t *testing.T) {
+	seedPath := filepath.Join(t.TempDir(), "seed.json")
+	disabled := []byte(`{"version":4,"credential_protection":"disabled","peers":[{"id":"phone","name":"Phone","status":"paired","token":"current-token","token_expires_at":"2099-01-01T00:00:00Z","previous_token":"previous-token","previous_token_expires_at":"2099-01-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(seedPath, disabled, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: seedPath}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{}, true); err != nil {
+		t.Fatal(err)
+	}
+	protected, err := os.ReadFile(seedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		open func(string) (*Module, error)
+	}{
+		{
+			name: "explicit disabled",
+			open: func(path string) (*Module, error) {
+				return New(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			},
+		},
+		{
+			name: "different provider",
+			open: func(path string) (*Module, error) {
+				return NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{name: "other-provider"}, true)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "devices.json")
+			if err := os.WriteFile(path, protected, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := test.open(path); err == nil {
+				t.Fatal("protected v4 registry was accepted under an incompatible protection policy")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(after, protected) {
+				t.Fatal("failed protected v4 open changed the original file")
+			}
+		})
+	}
+}
+
+func TestRegistryV4DisabledProtectionFailurePreservesOriginal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	original := []byte(`{"version":4,"credential_protection":"disabled","peers":[{"id":"phone","name":"Phone","status":"paired","token":"plaintext-token","token_expires_at":"2099-01-01T00:00:00Z","previous_token":"old-plaintext-token","previous_token_expires_at":"2099-01-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewWithProtector(config.DeviceConfig{ID: "windows-pc", RegistryPath: path}, config.SecurityConfig{}, config.DiscoveryConfig{}, 8899, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), registryTestProtector{failProtect: true}, true)
+	if err == nil {
+		t.Fatal("expected v4 disabled protection upgrade to fail")
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(after, original) {
+		t.Fatal("failed v4 disabled upgrade changed the original file")
 	}
 }
 

@@ -19,7 +19,8 @@ without rewriting the source file.
 - `-credential-action set|delete|status` plus `-credential-name`; hidden console or stdin input,
   no secret arguments/output, deterministic exit codes and no service startup.
 - Registry v4 protected current/previous token slots, purpose binding, restart decryption, v3 migration,
-  plaintext-disk exclusion and downgrade/provider/ciphertext failure handling.
+  atomic v4 `disabled`-to-protected upgrade, plaintext-disk exclusion, and byte-preserving fail-closed
+  rejection of protected-to-disabled or provider-mismatch opens.
 - Redacted configuration/support-bundle protection metadata without secret values, reference names,
   credential-store paths or state bodies.
 - Unit coverage for DPAPI/store round trips, purpose mismatch, corruption, bounds/version/duplicates,

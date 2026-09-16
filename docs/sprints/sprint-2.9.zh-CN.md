@@ -13,7 +13,8 @@ Windows 部署可用当前用户 DPAPI 保护管理 Bearer Token、配对码和 
 - 严格版本化、上限 1 MiB 的凭据存储：校验名称/值边界，拒绝重复/未知内容，以仅所有者临时文件刷盘并原子替换。
 - `auto`、`required`、`disabled` 策略；管理/配对值引用；内联/引用冲突校验和解析后管理 Token 长度校验。
 - `-credential-action set|delete|status` 与 `-credential-name`；隐藏终端或 stdin 输入，无秘密参数/输出，明确退出码，不启动服务。
-- 注册表 v4 受保护的当前/上一代 Token、purpose 绑定、重启解密、v3 迁移、磁盘明文排除，以及降级/provider/密文失败处理。
+- 注册表 v4 受保护的当前/上一代 Token、purpose 绑定、重启解密、v3 迁移、v4 `disabled` 到受保护模式的原子升级、磁盘明文排除，
+  以及受保护到 disabled 或 provider 不匹配时保持原字节的关闭式拒绝。
 - 脱敏配置/支持包保护元数据，不含秘密值、引用名、凭据存储路径或状态正文。
 - 覆盖 DPAPI/存储 round trip、purpose 不匹配、损坏、大小/版本/重复、失败不覆盖、YAML/JSON 策略、应用解析、CLI、
   注册表迁移/轮换/重启和支持包脱敏的单元测试。

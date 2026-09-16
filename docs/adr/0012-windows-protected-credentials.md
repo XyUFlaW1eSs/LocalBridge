@@ -29,7 +29,10 @@ v3 registry when protection or persistence fails.
 6. Device registry v4 declares its protection provider. In protected mode current and previous peer
    tokens use distinct peer/slot purposes and only ciphertext fields are legal. v3 plaintext migration
    encrypts every token before atomically replacing the original. Corrupt ciphertext, purpose mismatch,
-   provider mismatch and downgrade to plaintext fail closed.
+   provider mismatch and downgrade to plaintext fail closed. A v4 `disabled` registry may upgrade
+   atomically to the configured protector; an already-protected v4 registry may neither downgrade
+   to `disabled` nor open under a different provider, and every rejected transition preserves the
+   original bytes.
 7. Non-Windows production protection is explicitly unsupported. Only explicit `disabled` permits
    legacy plaintext persistence. Diagnostics report mode/effective support and secret source classes,
    but omit values, reference names and store paths.

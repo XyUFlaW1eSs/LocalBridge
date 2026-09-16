@@ -52,6 +52,17 @@ func TestResolveConfigCredentials(t *testing.T) {
 	}
 }
 
+func TestSecretStringAndClearPreservesValueAndZerosSource(t *testing.T) {
+	secret := []byte("temporary-secret")
+	value := secretStringAndClear(secret)
+	if value != "temporary-secret" {
+		t.Fatalf("runtime string changed: %q", value)
+	}
+	if !bytes.Equal(secret, make([]byte, len(secret))) {
+		t.Fatal("temporary plaintext was not cleared")
+	}
+}
+
 func TestResolveConfigCredentialsFailsForMissingOrShortManagementToken(t *testing.T) {
 	protector := appTestProtector{}
 	for name, prepare := range map[string]func(config.Config) error{

@@ -169,20 +169,26 @@ func resolveConfigCredentials(cfg config.Config, protector credentials.Protector
 			if err != nil {
 				return config.Config{}, credentials.Protection{}, fmt.Errorf("resolve management token reference: %w", err)
 			}
-			cfg.Security.BearerToken = string(secret)
+			cfg.Security.BearerToken = secretStringAndClear(secret)
 		}
 		if cfg.Security.PairingCodeRef != "" {
 			secret, err := store.Get(cfg.Security.PairingCodeRef)
 			if err != nil {
 				return config.Config{}, credentials.Protection{}, fmt.Errorf("resolve pairing code reference: %w", err)
 			}
-			cfg.Security.PairingCode = string(secret)
+			cfg.Security.PairingCode = secretStringAndClear(secret)
 		}
 	}
 	if cfg.Security.AuthEnabled && len(cfg.Security.BearerToken) < 16 {
 		return config.Config{}, credentials.Protection{}, errors.New("resolved management token must contain at least 16 characters when authentication is enabled")
 	}
 	return cfg, protection, nil
+}
+
+func secretStringAndClear(secret []byte) string {
+	value := string(secret)
+	clear(secret)
+	return value
 }
 
 func serverScheme(cfg config.Config) string {
