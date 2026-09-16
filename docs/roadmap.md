@@ -20,7 +20,7 @@ must also support multiple devices, intermittent connectivity and multiple conte
 | Release | Phase | Status | Result |
 |---|---|---|---|
 | `v0.1.0` | Phase 0 + Phase 1 / Sprint 1 | Delivered | Windows text clipboard bridge and iPhone Push/Pull Shortcuts |
-| `v0.2.x` | Phase 2 | In progress | Sprints 2.1–2.7 delivered through versioned config diagnostics; secure transport and production hardening remain |
+| `v0.2.x` | Phase 2 | In progress | Sprints 2.1–2.8 delivered through TLS baseline, certificate pinning and versioned config diagnostics; production hardening remains |
 | `v0.3.x` | Phase 3 | In progress | Sprint 3.1 Envelope/job store delivered; retries, history and rich clipboard remain |
 | `v0.4.x` | Phase 4 | In progress | Sprint 4.2A–4.2D GUI, Windows shell, receive approval and native host are delivered; URL/image work remains |
 | `v0.5.x` | Phase 5 | Planned | Additional clients and device adapters |
@@ -87,9 +87,14 @@ Planned work:
   protected-at-rest credentials and user-facing provisioning remain pending.
 - Sprint 2.7 defines configuration schema v1, migrates legacy v0 in memory, rejects unknown/future
   input and exposes management-only redacted effective configuration diagnostics.
+- Sprint 2.8 adds opt-in TLS 1.2+ server transport, HTTPS-only startup, leaf certificate
+  fingerprint advertisement, pinned secure peers, explicit HTTP legacy migration and redirect-free
+  outbound transport. Initial trust UX, certificate rotation and iPhone trust installation remain future work.
 - LAN discovery through mDNS or UDP broadcast, plus manual IP/port fallback.
 - Peer registry with online/last-seen/capability state and network-change recovery.
-- TLS or an equivalent authenticated local channel; no silent downgrade on paired links.
+- TLS or an equivalent authenticated local channel; no silent downgrade on paired links. Sprint 2.8
+  establishes the TLS baseline and pinning contract; automated certificate rotation and first-use
+  trust UX remain outstanding.
 - Retry policy, request timeouts, rate limits and payload-size policy shared by all modules.
 - Persistent boundary decision: what survives restart, retention, encryption-at-rest and deletion.
 - Windows firewall/service/tray installation design, health diagnostics and support bundle.

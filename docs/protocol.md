@@ -4,7 +4,8 @@
 
 For the complete clipboard field reference, see [Clipboard Module and API](clipboard.md).
 
-Base URL: `http://<windows-ip>:8899`.
+Base URL: `http://<windows-ip>:8899` by default. With `server.tls_enabled: true`, the
+only base URL is `https://<windows-ip>:8899`; the listener never falls back to HTTP.
 
 Phase 1 transports UTF-8 text only. JSON requests and responses use UTF-8. Times are RFC
 3339 UTC strings.
@@ -35,9 +36,16 @@ This endpoint lets a client choose a compatible workflow before sending content:
   "protocol_version": 1,
   "request_id": "<request-id>",
   "device": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "scheme": "https",
+  "certificate_sha256": "<lowercase-leaf-certificate-sha256>",
+  "transport": {"scheme": "https", "certificate_sha256": "<lowercase-leaf-certificate-sha256>"},
   "capabilities": ["system.health", "system.capabilities", "clipboard.text.push", "clipboard.text.pull"]
 }
 ```
+
+The `scheme` and `certificate_sha256` fields are transport metadata. The fingerprint is the
+lowercase SHA-256 of the server leaf certificate DER. Discovery and capabilities never grant
+trust; a paired HTTPS peer must store the fingerprint and pin it on every request.
 
 Capability names are opaque strings. Clients must tolerate unknown capabilities and must not
 assume that a capability exists without checking this endpoint.
@@ -186,6 +194,9 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
       "name": "iPhone",
       "address": "192.168.1.20",
       "port": 8899,
+      "secure": true,
+      "scheme": "https",
+      "certificate_sha256": "<lowercase-leaf-certificate-sha256>",
       "capabilities": ["clipboard.text.push"],
       "status": "paired",
       "paired_at": "2026-08-04T00:00:00Z",
@@ -207,9 +218,17 @@ an automatic HTTP request to the phone. The iPhone must run the Pull Shortcut to
   "name": "iPhone",
   "address": "192.168.1.20",
   "port": 8899,
-  "capabilities": ["clipboard.text.push", "clipboard.text.pull"]
+  "capabilities": ["clipboard.text.push", "clipboard.text.pull"],
+  "secure": true,
+  "scheme": "https",
+  "certificate_sha256": "<lowercase-leaf-certificate-sha256>"
 }
 ```
+
+`secure: true` requires exactly a 64-character lowercase hexadecimal SHA-256 fingerprint and
+`scheme: "https"`. A peer with `secure: false` is explicit legacy HTTP. Registry v2 entries are
+migrated to registry v3 with `secure: false` and `scheme: "http"`; they are never upgraded by
+discovery. Public device metadata may show scheme and fingerprint, but never token values.
 
 Pairing is disabled when `security.pairing_code` is empty and returns `503`; an empty request code
 does not enable it.
@@ -248,7 +267,8 @@ not used for probes or forwarding until it is rotated or paired again.
 When `discovery.enabled` is true, the device module sends and listens for bounded UDP/IPv4
 announcements on `discovery.port` (default `8898`). `GET /api/v1/devices/discovered` returns
 recent reachability hints. Discovery packets contain a protocol version, device metadata,
-API port, capabilities and a nonce; they do not contain authentication credentials.
+API port, capabilities, `scheme`, `secure`, and (for HTTPS) the lowercase leaf
+`certificate_sha256`/`fingerprint`, plus a nonce; they do not contain authentication credentials.
 
 Discovered devices are not added to `peers`, cannot access protected APIs and are not trusted
 until the explicit pairing flow succeeds. Multicast/broadcast may be blocked by some networks;
@@ -265,6 +285,12 @@ For a paired peer advertising `clipboard.text.push`, a local Windows clipboard e
 to `POST /api/v1/clipboard` using the peer token. Events whose source is `remote` are not
 forwarded again, which prevents a two-host echo loop. The request uses the same clipboard JSON
 fields documented above and the remote response's `accepted` value is logged as metadata.
+
+HTTPS outbound requests pin the exact paired leaf certificate and accept self-signed certificates
+only through that exact pin. They do not follow redirects, cross hosts, or change scheme. A secure
+peer is never retried over HTTP after a TLS or fingerprint failure. If the certificate is not
+trusted by Windows or iPhone, install the private CA or certificate in the platform trust store;
+do not disable verification globally.
 
 This first outbound path is best-effort: it has a bounded request timeout but no durable queue,
 retry scheduler, delivery receipt store or offline replay. EventBus notifications can be dropped
@@ -374,6 +400,11 @@ the `X-Request-ID` response header.
 ## Security configuration
 
 ```yaml
+server:
+  tls_enabled: false
+  tls_cert_file: ""
+  tls_key_file: ""
+
 security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
@@ -397,7 +428,12 @@ system protected secret storage remain future hardening work.
 
 ## Compatibility and security
 
+TLS is opt-in for compatibility. When enabled, both certificate and private-key files are
+required at application initialization, the minimum TLS version is 1.2, and the server starts
+HTTPS only. Self-signed certificates require installing a private CA/certificate into the
+Windows/iPhone trust store for browser/GUI use; pinned peer transport may accept the exact leaf
+certificate. Authentication remains separate from transport encryption, and the port must not
+be exposed publicly.
+
 The `/api/v1` prefix is reserved for backward-compatible additions. New content types should
-reuse the `Item` envelope and add a new MIME type. Breaking changes require `/api/v2` and an
-ADR. Authentication is optional and LAN traffic is not encrypted, so clients must use a trusted
-private LAN, enable authentication for network deployment and must not expose the port publicly.
+reuse the `Item` envelope and add a new MIME type. Breaking changes require `/api/v2` and an ADR.

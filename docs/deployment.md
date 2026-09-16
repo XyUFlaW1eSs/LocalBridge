@@ -56,6 +56,27 @@ Set `discovery.enabled: true` only when UDP broadcast on the configured port is 
 discovery does not grant trust. A positive
 `device.health_interval` enables best-effort peer health checks and local clipboard forwarding.
 
+### TLS transport
+
+TLS is disabled by default. To enable it, configure a matching certificate/private-key pair:
+
+```yaml
+server:
+  tls_enabled: true
+  tls_cert_file: "C:\\path\\to\\localbridge.crt"
+  tls_key_file: "C:\\path\\to\\localbridge.key"
+```
+
+The application validates both files before composing modules and starts HTTPS only, with TLS
+1.2 minimum (TLS 1.3 preferred). It never silently falls back to HTTP. The leaf certificate's
+lowercase SHA-256 fingerprint appears in capabilities and discovery and must be entered in the
+pairing record for `secure: true`. Discovery is only a hint and does not establish trust.
+
+Self-signed certificates can be pinned by peer-to-peer transport, but Windows browsers/WebView2
+and iPhone Safari/Shortcuts may reject them until the private CA or certificate is installed in
+the platform trust store. Initial fingerprint confirmation/distribution UX, automatic certificate
+rotation, and an iPhone trust-install flow are future work.
+
 ## 3. Firewall
 
 Allow inbound TCP 8899 only on the Private profile, or replace the port with your configured
@@ -95,7 +116,8 @@ File management endpoints under `/api/v1/files/` have an additional boundary: wi
 access; keep their random, expiring URLs inside the trusted LAN. The QR endpoints provide both a
 renderer-neutral JSON URL at `/api/v1/files/shares/<id>/qr` and a locally generated PNG at
 `/api/v1/files/shares/<id>/qr.png`. The embedded browser GUI is available at
-`http://127.0.0.1:8899/app/` with Shares, Receive records and Settings views. Browser uploads use
+`http://127.0.0.1:8899/app/` when TLS is disabled, or `https://127.0.0.1:8899/app/` when enabled,
+with Shares, Receive records and Settings views. Browser uploads use
 `POST /api/v1/files/browser-shares`; one multipart batch becomes one share and files are stored under
 the configured `files.share_dir` (default `data/shared`), never under a client-provided path. When
 authentication is enabled, local loopback management requests remain available to the local GUI;

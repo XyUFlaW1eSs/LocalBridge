@@ -12,9 +12,9 @@ registration. Features live behind module interfaces and communicate through eve
 
 ```text
                          Trusted LAN
-┌──────────────────┐       HTTP/JSON       ┌─────────────────────────┐
-│ iPhone / Browser  │ ───────────────────> │ LocalBridge Windows     │
-│ share / receive   │ <─────────────────── │ GUI + HTTP + EventBus   │
+┌──────────────────┐      HTTP(S)/JSON      ┌─────────────────────────┐
+│ iPhone / Browser  │ ────────────────┐   │ LocalBridge Windows     │
+│ share / receive   │ <───────────────┘   │ GUI + HTTP(S) + EventBus │
 └──────────────────┘                      │ clipboard + files       │
                                           └───────────┬─────────────┘
                                                       │ Win32 adapter
@@ -39,8 +39,10 @@ Shortcuts, which is compatible with iOS's background execution constraints.
 - `internal/modules/device`: local device identity, explicit pairing and the versioned persisted
   peer registry. Public models exclude credentials; the private registry stores issue/expiry and
   bounded rotation-overlap state. LAN discovery remains a reachability hint and never grants trust.
-- `internal/transport`: bounded HTTP JSON client used for peer capabilities, health checks and
+- `internal/transport`: bounded HTTP(S) JSON client used for peer capabilities, health checks and
   best-effort outbound delivery. Durable queues and retry policy belong to the future sync engine.
+- HTTPS peer endpoints pin the paired leaf certificate and reject all redirects; secure peers never
+  downgrade to HTTP.
 - `internal/modules/clipboard`: domain behavior and platform interface. Win32 code is isolated
   in a build-tagged adapter.
 - `internal/modules/files`: persisted share/receive metadata, capability URLs, safe source-file
@@ -104,10 +106,11 @@ to the system browser.
 ## Device credential flow
 
 Pairing creates a random 256-bit peer token and stores it only in the private registry model. Public
-device responses contain lifecycle timestamps, not credential values. A rotation installs a new
+device responses contain lifecycle timestamps and transport security metadata, not credential values.
+A secure peer also stores the exact lowercase SHA-256 of the leaf certificate DER. A rotation installs a new
 token and retains the still-valid previous token for a short configured overlap. Validation accepts
 only unexpired current/overlap credentials. Expired peers are excluded from health probes and
-outbound forwarding. Registry version 1 migrates to version 2; entries affected by the former
+outbound forwarding. Registry versions 1 and 2 migrate to version 3; legacy entries are explicitly marked HTTP. Entries affected by the former
 non-persistence bug are marked `repair_required` rather than silently trusted.
 
 ## Configuration lifecycle

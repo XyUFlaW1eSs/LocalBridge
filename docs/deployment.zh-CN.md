@@ -48,6 +48,23 @@ security:
 `repair_required`，需要重新配对或由本机轮换。只有确认允许在配置端口上使用 UDP 广播时才启用 `discovery.enabled`；
 发现不会授予信任。正数的 `device.health_interval` 会启用尽力而为的对端健康检查和本地剪贴板出站。
 
+### TLS 传输
+
+TLS 默认关闭。启用时必须配置匹配的证书/私钥：
+
+```yaml
+server:
+  tls_enabled: true
+  tls_cert_file: "C:\\path\\to\\localbridge.crt"
+  tls_key_file: "C:\\path\\to\\localbridge.key"
+```
+
+应用会在模块组合前验证两个文件，并只启动 HTTPS，最低 TLS 版本为 1.2（优先 1.3）；不会静默回退 HTTP。
+叶证书的小写 SHA-256 会出现在 capabilities 和 discovery 中；`secure: true` 的配对记录必须保存该指纹。
+Discovery 只是提示，不会建立信任。对端传输可以通过精确指纹固定自签名证书，但 Windows 浏览器/WebView2 和 iPhone
+Safari/Shortcuts 可能拒绝未安装信任的证书，请将私有 CA 或证书安装到平台信任库。首次指纹确认/分发 UX、自动证书轮换和
+iPhone 信任安装流程仍是后续工作。
+
 ## 3. 防火墙
 
 仅在 Private 配置文件中允许 TCP 8899 入站；如果修改端口，请同步替换命令中的端口：
@@ -79,7 +96,8 @@ Invoke-RestMethod http://127.0.0.1:8899/api/v1/system/config
 的管理请求返回 `403`；启用认证后，管理操作必须使用 Bearer Token 或已配对的 peer Token。`/share/<token>` 和
 `/receive/<token>` 页面是供手机访问的公开能力 URL，请只在可信局域网内使用随机且会过期的链接。二维码接口同时提供
 渲染器无关的 JSON URL（`/api/v1/files/shares/<id>/qr`）和本地生成的 PNG 图片
-（`/api/v1/files/shares/<id>/qr.png`）。内嵌浏览器 GUI 位于 `http://127.0.0.1:8899/app/`，包含分享、接收记录和设置三个区域。
+（`/api/v1/files/shares/<id>/qr.png`）。TLS 关闭时内嵌浏览器 GUI 位于 `http://127.0.0.1:8899/app/`，启用时位于
+`https://127.0.0.1:8899/app/`，包含分享、接收记录和设置三个区域。
 浏览器上传使用 `POST /api/v1/files/browser-shares`；一个 multipart 批次创建一条分享，文件写入配置的 `files.share_dir`
 （默认 `data/shared`），不会使用客户端提供的本地路径。启用认证后，本机回环管理请求仍供本地 GUI 使用；局域网管理客户端仍
 必须提供 Bearer Token 或已配对的 peer Token。

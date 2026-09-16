@@ -4,7 +4,8 @@
 
 完整的剪贴板字段参考请查看[剪贴板模块与 API](clipboard.zh-CN.md)。
 
-基础 URL：`http://<windows-ip>:8899`。
+默认基础 URL：`http://<windows-ip>:8899`。启用 `server.tls_enabled: true` 后，唯一的基础 URL 是
+`https://<windows-ip>:8899`；监听器不会静默回退到 HTTP。
 
 Phase 1 只传输 UTF-8 文本。JSON 请求和响应使用 UTF-8，时间使用 RFC 3339 UTC 字符串。
 
@@ -33,9 +34,15 @@ Phase 1 只传输 UTF-8 文本。JSON 请求和响应使用 UTF-8，时间使用
   "protocol_version": 1,
   "request_id": "<request-id>",
   "device": {"id": "windows-pc", "name": "LocalBridge Windows"},
+  "scheme": "https",
+  "certificate_sha256": "<小写叶证书SHA-256>",
+  "transport": {"scheme": "https", "certificate_sha256": "<小写叶证书SHA-256>"},
   "capabilities": ["system.health", "system.capabilities", "clipboard.text.push", "clipboard.text.pull"]
 }
 ```
+
+`scheme` 和 `certificate_sha256` 是传输元数据。指纹是服务端叶证书 DER 的小写 SHA-256。Discovery 和 capabilities
+都不会授予信任；已配对的 HTTPS 对端必须保存指纹，并在每次请求时固定校验。
 
 能力名称是不可枚举的字符串。客户端必须容忍未知能力，并且在使用某项能力前不能假设它一定存在。
 
@@ -176,6 +183,9 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
       "name": "iPhone",
       "address": "192.168.1.20",
       "port": 8899,
+      "secure": true,
+      "scheme": "https",
+      "certificate_sha256": "<小写叶证书SHA-256>",
       "capabilities": ["clipboard.text.push"],
       "status": "paired",
       "paired_at": "2026-08-04T00:00:00Z",
@@ -196,9 +206,16 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
   "name": "iPhone",
   "address": "192.168.1.20",
   "port": 8899,
-  "capabilities": ["clipboard.text.push", "clipboard.text.pull"]
+  "capabilities": ["clipboard.text.push", "clipboard.text.pull"],
+  "secure": true,
+  "scheme": "https",
+  "certificate_sha256": "<小写叶证书SHA-256>"
 }
 ```
+
+`secure: true` 必须同时使用 `scheme: "https"` 和严格 64 位小写十六进制 SHA-256 指纹。`secure: false` 明确表示
+legacy HTTP。registry v2 迁移到 v3 时会写入 `secure: false`、`scheme: "http"`，不会被 discovery 自动升级。公开设备元数据
+可以显示 scheme 和指纹，但绝不显示 Token。
 
 `security.pairing_code` 为空时配对功能关闭并返回 `503`；请求中提交空 code 不会启用它。
 
@@ -230,8 +247,8 @@ iPhone 的对端地址，也不会自动向手机发 HTTP 请求。iPhone 必须
 ### 局域网发现
 
 当 `discovery.enabled` 为 `true` 时，设备模块会在 `discovery.port`（默认 `8898`）上发送并监听有大小限制的 UDP/IPv4
-广播。`GET /api/v1/devices/discovered` 返回最近的可达性提示。发现数据包包含协议版本、设备元数据、API 端口、能力和
-nonce，不包含认证凭据。
+广播。`GET /api/v1/devices/discovered` 返回最近的可达性提示。发现数据包包含协议版本、设备元数据、API 端口、能力、
+`scheme`、`secure`，以及 HTTPS 的小写叶证书 `certificate_sha256`/`fingerprint` 和 nonce，不包含认证凭据。
 
 发现到的设备不会加入 `peers`，不能访问受保护接口，也不会获得信任，直到显式配对成功。某些网络可能屏蔽组播/广播；
 手动配对始终是回退方式。
@@ -245,6 +262,10 @@ nonce，不包含认证凭据。
 对于声明支持 `clipboard.text.push` 的已配对对端，本地 Windows 剪贴板事件会使用 peer Token POST 到对端的
 `/api/v1/clipboard`。`source` 为 `remote` 的事件不会再次转发，因此两个 LocalBridge 主机之间不会形成回环。请求使用
 上文定义的剪贴板 JSON 字段，远端响应的 `accepted` 只作为元数据记录到日志。
+
+HTTPS 出站请求固定校验已配对的叶证书，只有精确指纹匹配时才接受自签名证书；不会跟随重定向、跨主机或切换 scheme。
+secure peer 在 TLS/指纹失败后绝不会重试 HTTP。若证书未被 Windows 或 iPhone 信任，应安装私有 CA 或证书到平台信任库，
+不得全局关闭验证。
 
 当前出站路径是尽力而为：有请求超时，但没有持久化队列、重试调度器、投递回执存储或离线重放。EventBus 缓冲区满时通知
 可能被丢弃；这些保证属于 Phase 3 同步引擎。由于 iPhone 不运行常驻监听器，Phase 1 的 iPhone Shortcuts 仍然是主动 Pull。
@@ -325,6 +346,11 @@ Header 中返回同一个值。
 ## 安全配置
 
 ```yaml
+server:
+  tls_enabled: false
+  tls_cert_file: ""
+  tls_key_file: ""
+
 security:
   auth_enabled: true
   bearer_token: "a-long-random-token-at-least-16-characters"
@@ -346,6 +372,9 @@ device:
 
 ## 兼容性与安全
 
+TLS 为兼容现有部署默认关闭。启用时，应用初始化必须同时加载证书和私钥，最低 TLS 版本为 1.2，服务端只启动 HTTPS。
+自签名证书用于浏览器/GUI 时，需要将私有 CA/证书安装到 Windows/iPhone 信任库；固定精确叶证书的对端传输可以接受该证书。
+认证仍与传输加密分离，且不得将端口暴露到公网。
+
 `/api/v1` 前缀用于向后兼容的增量扩展。新的内容类型应复用 `Item` 信封并增加 MIME 类型。破坏性变更需要使用
-`/api/v2` 并编写 ADR。认证是可选的，局域网流量尚未加密，因此客户端必须使用可信私有局域网；网络部署应启用认证，
-且不得将端口暴露到公网。
+`/api/v2` 并编写 ADR。
